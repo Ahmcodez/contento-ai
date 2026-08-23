@@ -19,7 +19,20 @@ function createApp() {
 
   app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors({ origin: true, credentials: true }));
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        // No Origin header (server-to-server, curl, mobile apps) is allowed
+        // through — only browser cross-origin requests carry this header,
+        // and those are the ones this allowlist is meant to constrain.
+        if (!origin || config.corsOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+      },
+      credentials: true,
+    }),
+  );
   app.use(
     pinoHttp({
       logger,
