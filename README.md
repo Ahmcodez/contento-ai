@@ -10,8 +10,11 @@ reviewable and exportable from a single dashboard.
 
 ## Status
 
-🚧 Early development. Architecture design is complete; no application code
-has been written yet. Start at **[`docs/SUMMARY.md`](docs/SUMMARY.md)** for
+🚧 Backend foundation implemented and tested (auth, projects, video
+upload, async processing pipeline through clip detection). See
+[`backend/README.md`](backend/README.md) to run it locally.
+
+Architecture design is complete. Start at **[`docs/SUMMARY.md`](docs/SUMMARY.md)** for
 the consolidated architecture overview, diagrams, and the dependency-ordered
 development milestones. Full detail:
 
