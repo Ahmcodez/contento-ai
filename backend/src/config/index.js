@@ -31,6 +31,23 @@ const envSchema = z.object({
   MAX_AI_REQUESTS_PER_USER_PER_DAY: z.coerce.number().int().positive().default(50),
   MAX_PROCESSING_JOBS_PER_USER_CONCURRENT: z.coerce.number().int().positive().default(2),
 
+  MAX_TRANSCRIPT_CHARS_PER_AI_CALL: z.coerce.number().int().positive().default(12000),
+  MAX_TRANSCRIPT_CHUNKS: z.coerce.number().int().positive().default(8),
+  MAX_AI_CALLS_PER_JOB: z.coerce.number().int().positive().default(20),
+  MAX_GENERATED_CONTENT_TYPES: z.coerce.number().int().positive().default(5),
+  AI_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
+
+  CLIP_MIN_DURATION_SECONDS: z.coerce.number().int().positive().default(15),
+  CLIP_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(90),
+
+  CAPTION_FONT: z.string().default('Arial'),
+  CAPTION_FONT_SIZE: z.coerce.number().int().positive().default(48),
+  CAPTION_MAX_CHARS_PER_LINE: z.coerce.number().int().positive().default(28),
+  CAPTION_MAX_LINES: z.coerce.number().int().positive().default(2),
+  CAPTION_SAFE_MARGIN_PERCENT: z.coerce.number().min(0).max(0.4).default(0.08),
+
+  FFMPEG_OUTPUT_MAX_SIZE_MB: z.coerce.number().int().positive().default(200),
+
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
   AUTH_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(10),
@@ -95,6 +112,21 @@ function loadConfig() {
       maxClipsPerVideo: env.MAX_CLIPS_PER_VIDEO,
       maxAiRequestsPerUserPerDay: env.MAX_AI_REQUESTS_PER_USER_PER_DAY,
       maxProcessingJobsPerUserConcurrent: env.MAX_PROCESSING_JOBS_PER_USER_CONCURRENT,
+      maxTranscriptCharsPerAiCall: env.MAX_TRANSCRIPT_CHARS_PER_AI_CALL,
+      maxTranscriptChunks: env.MAX_TRANSCRIPT_CHUNKS,
+      maxAiCallsPerJob: env.MAX_AI_CALLS_PER_JOB,
+      maxGeneratedContentTypes: env.MAX_GENERATED_CONTENT_TYPES,
+      aiRetryAttempts: env.AI_RETRY_ATTEMPTS,
+      clipMinDurationSeconds: env.CLIP_MIN_DURATION_SECONDS,
+      clipMaxDurationSeconds: env.CLIP_MAX_DURATION_SECONDS,
+    },
+
+    captions: {
+      font: env.CAPTION_FONT,
+      fontSize: env.CAPTION_FONT_SIZE,
+      maxCharsPerLine: env.CAPTION_MAX_CHARS_PER_LINE,
+      maxLines: env.CAPTION_MAX_LINES,
+      safeMarginPercent: env.CAPTION_SAFE_MARGIN_PERCENT,
     },
 
     rateLimit: {
