@@ -138,6 +138,7 @@ function loadConfig() {
     ffmpeg: {
       ffmpegPath: env.FFMPEG_PATH,
       ffprobePath: env.FFPROBE_PATH,
+      outputMaxSizeMb: env.FFMPEG_OUTPUT_MAX_SIZE_MB,
     },
 
     queue: {
