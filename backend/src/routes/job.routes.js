@@ -8,10 +8,10 @@ const router = express.Router();
 
 const jobIdParam = z.object({ params: z.object({ jobId: z.string().uuid() }) });
 
-router.use(requireAuth);
-
-router.get('/jobs/:jobId', validate(jobIdParam), controller.getOne);
-router.get('/jobs/:jobId/events', validate(jobIdParam), controller.getEvents);
-router.post('/jobs/:jobId/cancel', validate(jobIdParam), controller.cancel);
+// See media.routes.js for why requireAuth is applied per-route here
+// instead of via router.use() at this shared /api/v1 mount point.
+router.get('/jobs/:jobId', requireAuth, validate(jobIdParam), controller.getOne);
+router.get('/jobs/:jobId/events', requireAuth, validate(jobIdParam), controller.getEvents);
+router.post('/jobs/:jobId/cancel', requireAuth, validate(jobIdParam), controller.cancel);
 
 module.exports = router;
