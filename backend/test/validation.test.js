@@ -49,4 +49,12 @@ describe('validation and error handling', () => {
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['x-frame-options']).toBeDefined();
   });
+
+  it('rejects a token signed with a different algorithm than expected', async () => {
+    const jwt = require('jsonwebtoken');
+    // A token signed with "none" (no signature) must never be accepted.
+    const forged = jwt.sign({ sub: 'someone' }, '', { algorithm: 'none' });
+    const res = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${forged}`);
+    expect(res.status).toBe(401);
+  });
 });
