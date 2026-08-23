@@ -1,7 +1,20 @@
 const { AIProvider, AIProviderError } = require('./AIProvider');
+const { CONTENT_ANALYSIS_JSON_SCHEMA } = require('./schemas');
 const config = require('../config');
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+
+/**
+ * Models occasionally wrap JSON in a markdown code fence even when asked
+ * for raw JSON. Stripping this is a mechanical, safe recovery step —
+ * distinct from "guessing" at malformed content — before we give up and
+ * classify the response as unparseable.
+ */
+function stripMarkdownFences(text) {
+  const trimmed = text.trim();
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenceMatch ? fenceMatch[1] : trimmed;
+}
 
 /**
  * Real Gemini implementation of AIProvider, using the plain HTTP API
@@ -77,7 +90,7 @@ class GeminiProvider extends AIProvider {
 
     let data;
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(stripMarkdownFences(text));
     } catch {
       // A response that fails schema/JSON validation is treated as a
       // retryable provider error, not silently passed through malformed
@@ -91,23 +104,12 @@ class GeminiProvider extends AIProvider {
   }
 
   async analyzeContent({ transcript }) {
-    const schema = {
-      type: 'object',
-      properties: {
-        summary: { type: 'string' },
-        topics: { type: 'array', items: { type: 'string' } },
-        keyQuotes: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } },
-          },
-        },
-      },
-      required: ['summary', 'topics', 'keyQuotes'],
-    };
-    const prompt = `Analyze the following video transcript. Identify the overall summary, key topics discussed, and any particularly quotable moments with approximate timestamps if present in the text.\n\nTranscript:\n${transcript}`;
-    const { data, usage } = await this.generateStructuredOutput({ prompt, schema, maxTokens: 2048 });
+    const prompt = `Analyze the following video transcript in depth. Identify: an overall summary, key topics, key points, stories told, strong opinions expressed, educational moments, surprising statements, questions raised, conclusions reached, memorable quotes, and self-contained ideas that could stand alone. Include approximate startMs/endMs timestamps where the transcript text suggests them.\n\nTranscript:\n${transcript}`;
+    const { data, usage } = await this.generateStructuredOutput({
+      prompt,
+      schema: CONTENT_ANALYSIS_JSON_SCHEMA,
+      maxTokens: 4096,
+    });
     return { ...data, usage };
   }
 
