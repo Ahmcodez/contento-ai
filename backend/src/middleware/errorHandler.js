@@ -8,9 +8,22 @@ function notFoundHandler(req, res, next) {
 // eslint-disable-next-line no-unused-vars
 function errorHandler(err, req, res, next) {
   const isAppError = err instanceof AppError;
-  const statusCode = isAppError ? err.statusCode : 500;
-  const code = isAppError ? err.code : 'INTERNAL_ERROR';
-  const message = isAppError ? err.message : 'Internal server error';
+
+  // Errors thrown by Express/body-parser itself (e.g. payload-too-large,
+  // malformed JSON) aren't AppError instances but do carry a real,
+  // meaningful HTTP status — trust that instead of collapsing everything
+  // unrecognized into a 500.
+  const expressStatus = !isAppError && Number.isInteger(err.status || err.statusCode)
+    ? (err.status || err.statusCode)
+    : null;
+
+  const statusCode = isAppError ? err.statusCode : expressStatus || 500;
+  const code = isAppError ? err.code : expressStatus ? 'BAD_REQUEST' : 'INTERNAL_ERROR';
+  const message = isAppError
+    ? err.message
+    : expressStatus
+      ? err.message || 'Request could not be processed'
+      : 'Internal server error';
 
   // Full detail (stack trace, provider payloads) is logged server-side
   // only — never returned to the client.
