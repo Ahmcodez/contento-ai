@@ -15,6 +15,7 @@ const generatedClipRepository = require('../repositories/generatedClip.repositor
  */
 async function renderClip({ mediaAsset, transcriptSegments, clipCandidate }) {
   const storageDriver = getStorageDriver();
+  await generatedClipRepository.upsertPending(clipCandidate.id);
   await generatedClipRepository.markRendering(clipCandidate.id);
 
   const workDir = path.join(config.storage.tmpPath, `clip-${clipCandidate.id}`);
