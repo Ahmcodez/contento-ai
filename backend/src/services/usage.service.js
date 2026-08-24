@@ -23,4 +23,13 @@ async function countAiRequestsToday(userId) {
   return Number(result.total) || 0;
 }
 
-module.exports = { recordAiRequest, countAiRequestsToday };
+async function countAiRequestsForJob(processingJobId) {
+  if (!processingJobId) return 0;
+  const result = await db('usage_records')
+    .where({ processing_job_id: processingJobId, category: 'ai_requests' })
+    .sum('amount as total')
+    .first();
+  return Number(result.total) || 0;
+}
+
+module.exports = { recordAiRequest, countAiRequestsToday, countAiRequestsForJob };
