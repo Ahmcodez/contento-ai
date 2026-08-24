@@ -7,6 +7,7 @@ const { AIProviderError } = require('../src/ai/AIProvider');
 jest.mock('../src/services/usage.service', () => ({
   recordAiRequest: jest.fn().mockResolvedValue(undefined),
   countAiRequestsToday: jest.fn(),
+  countAiRequestsForJob: jest.fn().mockResolvedValue(0),
 }));
 
 const usageService = require('../src/services/usage.service');
@@ -100,6 +101,15 @@ describe('callStructured', () => {
     const provider = makeProvider([new Error('unexpected network blip'), { data: { value: 5 }, usage: {} }]);
     const { data } = await callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, maxAttempts: 3 });
     expect(data).toEqual({ value: 5 });
+  });
+
+  it('refuses to make a call once the job has hit its ai call budget', async () => {
+    usageService.countAiRequestsForJob.mockResolvedValueOnce(20); // at config default limit
+    const provider = makeProvider([{ data: { value: 1 }, usage: {} }]);
+    await expect(
+      callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, processingJobId: 'job-x', maxAttempts: 3 }),
+    ).rejects.toThrow('reached its limit');
+    expect(provider.generateStructuredOutput).not.toHaveBeenCalled();
   });
 });
 
