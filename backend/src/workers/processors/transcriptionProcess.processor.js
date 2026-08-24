@@ -3,16 +3,9 @@ const processingJobRepository = require('../../repositories/processingJob.reposi
 const { getStorageDriver } = require('../../storage');
 const { getTranscriptionProvider } = require('../../transcription');
 const { TranscriptionProviderError } = require('../../transcription/TranscriptionProvider');
+const transcriptService = require('../../services/transcript.service');
 const { QUEUE_NAMES, RETRY_CONFIG, getQueue } = require('../../queue/queues');
 
-/**
- * Persisting the full transcript into transcripts/transcript_segments
- * lands in the milestone that builds the review UI (docs/SUMMARY.md
- * milestone 5). For this milestone, a successful transcription advances
- * the pipeline state with a summary attached to the job event metadata —
- * enough to prove the queue -> provider -> state-transition plumbing
- * end to end.
- */
 async function processTranscription(job) {
   const { processingJobId, mediaAssetId, audioStorageKey } = job.data;
   const storageDriver = getStorageDriver();
@@ -45,6 +38,9 @@ async function processTranscription(job) {
     throw err; // retryable — let BullMQ's backoff/retry handle it
   }
 
+  const providerName = provider.constructor.name;
+  await transcriptService.persistTranscript({ mediaAssetId, rawResult: result, provider: providerName });
+
   await processingJobRepository.transitionState(processingJobId, {
     fromState: 'TRANSCRIBING',
     toState: 'TRANSCRIBED',
@@ -54,7 +50,7 @@ async function processTranscription(job) {
 
   await getQueue(QUEUE_NAMES.CONTENT_ANALYZE).add(
     'content.analyze',
-    { processingJobId, mediaAssetId, fullText: result.fullText },
+    { processingJobId, mediaAssetId },
     { ...RETRY_CONFIG[QUEUE_NAMES.CONTENT_ANALYZE], removeOnComplete: 100, removeOnFail: 500 },
   );
 
