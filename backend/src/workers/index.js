@@ -11,15 +11,15 @@ const processAudioExtract = require('./processors/audioExtract.processor');
 const processTranscription = require('./processors/transcriptionProcess.processor');
 const processContentAnalyze = require('./processors/contentAnalyze.processor');
 const processClipsDetect = require('./processors/clipsDetect.processor');
+const processClipRender = require('./processors/clipRender.processor');
+const processContentGenerate = require('./processors/contentGenerate.processor');
+const processJobFinalize = require('./processors/jobFinalize.processor');
 
 /**
- * Registered stages for this milestone. clips.score / clip.render /
- * content.generate / job.finalize are queued in docs/QUEUE.md but their
- * processors are deferred to the milestone that adds their schema
- * (transcripts, clip_candidates, generated_clips, generated_content —
- * see docs/SUMMARY.md milestones 5-10). Registering a fake processor for
- * them now would mean fabricating persisted results with no backing
- * table, which is exactly what we're avoiding.
+ * All pipeline stages through job.finalize are registered. Written
+ * content generation is chained after clip rendering rather than run as
+ * a true parallel branch — see the comment in contentAnalyze.processor.js
+ * for why.
  */
 const STAGE_PROCESSORS = [
   { queue: QUEUE_NAMES.VIDEO_VALIDATE, handler: processVideoValidate, concurrency: config.queue.concurrencyDefault },
@@ -31,6 +31,9 @@ const STAGE_PROCESSORS = [
   },
   { queue: QUEUE_NAMES.CONTENT_ANALYZE, handler: processContentAnalyze, concurrency: config.queue.concurrencyDefault },
   { queue: QUEUE_NAMES.CLIPS_DETECT, handler: processClipsDetect, concurrency: config.queue.concurrencyDefault },
+  { queue: QUEUE_NAMES.CLIP_RENDER, handler: processClipRender, concurrency: config.queue.concurrencyDefault },
+  { queue: QUEUE_NAMES.CONTENT_GENERATE, handler: processContentGenerate, concurrency: config.queue.concurrencyDefault },
+  { queue: QUEUE_NAMES.JOB_FINALIZE, handler: processJobFinalize, concurrency: config.queue.concurrencyDefault },
 ];
 
 function startWorkers() {
