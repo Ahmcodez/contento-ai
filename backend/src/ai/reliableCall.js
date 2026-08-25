@@ -8,6 +8,23 @@ function sleep(ms) {
 }
 
 /**
+ * Hard per-job ceiling on real AI calls (docs/COST.md §4 "never make
+ * unlimited AI requests"). Checked against the usage ledger before every
+ * call, not just at job start — so a job can't exceed the ceiling even
+ * across retries/chunks/content types spread across multiple processors.
+ */
+async function assertWithinJobBudget(processingJobId) {
+  if (!processingJobId) return;
+  const used = await usageService.countAiRequestsForJob(processingJobId);
+  if (used >= config.limits.maxAiCallsPerJob) {
+    throw new AIProviderError(
+      `This job has reached its limit of ${config.limits.maxAiCallsPerJob} AI calls and cannot make further requests.`,
+      { retryable: false, reason: 'job_ai_budget_exceeded' },
+    );
+  }
+}
+
+/**
  * Wraps a structured-output AI call with: retry + exponential backoff for
  * transient failures, zod schema validation of the parsed result (a
  * response that parses as JSON but doesn't match the expected shape is
@@ -34,6 +51,8 @@ async function callStructured({
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      await assertWithinJobBudget(processingJobId);
+
       const { data, usage } = await provider.generateStructuredOutput({
         prompt,
         systemPrompt,
@@ -85,6 +104,8 @@ async function callText({ provider, prompt, systemPrompt, maxTokens, userId, pro
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      await assertWithinJobBudget(processingJobId);
+
       const result = await provider.generateText({ prompt, systemPrompt, maxTokens });
       if (userId) {
         await usageService.recordAiRequest({ userId, processingJobId });
