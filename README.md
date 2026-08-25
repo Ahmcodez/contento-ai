@@ -10,9 +10,21 @@ reviewable and exportable from a single dashboard.
 
 ## Status
 
-🚧 Early development. Architecture is being built incrementally, milestone
-by milestone. See `docs/ARCHITECTURE.md` (added once the architecture
-design phase is complete) for system design decisions.
+🚧 Early development. Architecture design is complete; no application code
+has been written yet. Start at **[`docs/SUMMARY.md`](docs/SUMMARY.md)** for
+the consolidated architecture overview, diagrams, and the dependency-ordered
+development milestones. Full detail:
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system design & component rationale
+- [`docs/DATABASE.md`](docs/DATABASE.md) — schema
+- [`docs/PIPELINE.md`](docs/PIPELINE.md) — processing state machine
+- [`docs/API.md`](docs/API.md) — REST API design
+- [`docs/QUEUE.md`](docs/QUEUE.md) — BullMQ job architecture
+- [`docs/AI.md`](docs/AI.md) — AI provider abstraction
+- [`docs/COST.md`](docs/COST.md) — cost/quota architecture
+- [`docs/SECURITY.md`](docs/SECURITY.md) — security architecture
+- [`docs/SCALABILITY.md`](docs/SCALABILITY.md) — scaling path
+- [`docs/adr/`](docs/adr/) — architecture decision records
 
 ## Core workflow
 
