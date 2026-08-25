@@ -65,6 +65,56 @@ describe('projects', () => {
     expect(res.body.error.code).toBe('NOT_FOUND');
   });
 
+  it('includes media assets with their latest job when fetching a single project', async () => {
+    const token = await registerUser('withassets@example.com');
+    const me = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`);
+    const created = await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Has assets' });
+
+    const db = require('../src/db/client');
+    const [asset] = await db('media_assets')
+      .insert({
+        project_id: created.body.project.id,
+        uploaded_by: me.body.user.id,
+        original_filename: 'clip.mp4',
+        storage_key: 'x',
+        mime_type: 'video/mp4',
+        size_bytes: 1,
+        checksum_sha256: `c-${Date.now()}`,
+        status: 'validated',
+      })
+      .returning('*');
+    await db('processing_jobs').insert({ media_asset_id: asset.id, state: 'ANALYZING', progress_percent: 55 });
+
+    const res = await request(app)
+      .get(`/api/v1/projects/${created.body.project.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.project.mediaAssets).toHaveLength(1);
+    expect(res.body.project.mediaAssets[0].originalFilename).toBe('clip.mp4');
+    expect(res.body.project.mediaAssets[0].latestJob).toEqual({
+      id: expect.any(String),
+      state: 'ANALYZING',
+      progressPercent: 55,
+    });
+  });
+
+  it('returns an empty mediaAssets array for a project with no uploads', async () => {
+    const token = await registerUser('noassets@example.com');
+    const created = await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Empty project' });
+
+    const res = await request(app)
+      .get(`/api/v1/projects/${created.body.project.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.project.mediaAssets).toEqual([]);
+  });
+
   it('prevents another user from updating a project they do not own', async () => {
     const tokenA = await registerUser('owner3@example.com');
     const tokenB = await registerUser('intruder2@example.com');
