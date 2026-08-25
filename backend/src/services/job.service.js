@@ -46,6 +46,18 @@ async function getJob(userId, jobId) {
   };
 }
 
+/**
+ * Resolves and ownership-checks a job in one step — shared by every
+ * jobs-scoped sub-resource (transcript, clips, content) so each doesn't
+ * repeat the same workspace lookup + 404 logic.
+ */
+async function assertJobAccess(userId, jobId) {
+  const workspaceIds = await workspaceService.getWorkspaceIdsForUser(userId);
+  const job = await processingJobRepository.findByIdScoped(jobId, workspaceIds);
+  if (!job) throw AppError.notFound('Processing job not found');
+  return job;
+}
+
 async function getJobEvents(userId, jobId) {
   const workspaceIds = await workspaceService.getWorkspaceIdsForUser(userId);
   const job = await processingJobRepository.findByIdScoped(jobId, workspaceIds);
@@ -73,4 +85,4 @@ async function cancelJob(userId, jobId) {
   return { id: updated.id, state: updated.state };
 }
 
-module.exports = { getJob, getJobEvents, cancelJob, STATE_GROUPS, TERMINAL_STATES };
+module.exports = { getJob, getJobEvents, cancelJob, assertJobAccess, STATE_GROUPS, TERMINAL_STATES };
