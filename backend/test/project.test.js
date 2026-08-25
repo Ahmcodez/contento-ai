@@ -121,4 +121,39 @@ describe('projects', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(422);
   });
+
+  it('includes the latest processing job on each project in the list', async () => {
+    const token = await registerUser('withjob@example.com');
+    const created = await request(app)
+      .post('/api/v1/projects')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Has a job' });
+
+    const db = require('../src/db/client');
+    const me = await request(app).get('/api/v1/auth/me').set('Authorization', `Bearer ${token}`);
+    const [asset] = await db('media_assets')
+      .insert({
+        project_id: created.body.project.id,
+        uploaded_by: me.body.user.id,
+        original_filename: 'x.mp4',
+        storage_key: 'x',
+        mime_type: 'video/mp4',
+        size_bytes: 1,
+        checksum_sha256: `c-${Date.now()}`,
+      })
+      .returning('*');
+    await db('processing_jobs').insert({ media_asset_id: asset.id, state: 'TRANSCRIBING', progress_percent: 40 });
+
+    const res = await request(app).get('/api/v1/projects').set('Authorization', `Bearer ${token}`);
+    const project = res.body.data.find((p) => p.id === created.body.project.id);
+    expect(project.latest_job).toEqual({ id: expect.any(String), state: 'TRANSCRIBING', progressPercent: 40 });
+  });
+
+  it('returns latest_job as null for a project with no uploads yet', async () => {
+    const token = await registerUser('nojob@example.com');
+    await request(app).post('/api/v1/projects').set('Authorization', `Bearer ${token}`).send({ title: 'No uploads' });
+
+    const res = await request(app).get('/api/v1/projects').set('Authorization', `Bearer ${token}`);
+    expect(res.body.data[0].latest_job).toBeNull();
+  });
 });
