@@ -43,6 +43,7 @@ coverage/
 *.mkv
 *.mp3
 *.wav
+!/backend/test/fixtures/*.mp4
 
 # Misc
 *.pid
