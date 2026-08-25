@@ -34,10 +34,10 @@ Thumbs.db
 coverage/
 
 # Media / uploads / processing artifacts (never commit user content)
-uploads/
 /backend/storage/uploads/*
 /backend/storage/tmp/*
-tmp/
+!/backend/storage/uploads/.gitkeep
+!/backend/storage/tmp/.gitkeep
 *.mp4
 *.mov
 *.mkv
