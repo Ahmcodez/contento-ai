@@ -1,0 +1,12 @@
+process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL = process.env.DATABASE_URL_TEST || 'postgres://contento:contento@localhost:5432/contento_test';
+process.env.REDIS_URL = process.env.REDIS_URL_TEST || 'redis://localhost:6379/1';
+process.env.JWT_ACCESS_SECRET = 'test-access-secret-not-for-production-use-000000';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-not-for-production-use-000000';
+process.env.JWT_ACCESS_EXPIRES_IN = '15m';
+process.env.STORAGE_LOCAL_PATH = './storage/test-uploads';
+process.env.STORAGE_TMP_PATH = './storage/test-tmp';
+process.env.RATE_LIMIT_MAX_REQUESTS = '1000';
+process.env.AUTH_RATE_LIMIT_MAX_REQUESTS = '1000';
+process.env.MAX_UPLOAD_SIZE_MB = '10';
+process.env.MAX_PROCESSING_JOBS_PER_USER_CONCURRENT = '2';
