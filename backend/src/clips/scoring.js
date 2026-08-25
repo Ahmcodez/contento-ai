@@ -48,7 +48,7 @@ function scoreDurationFit(durationMs) {
  */
 function scoreContextIndependence(text) {
   const trimmed = text.trim();
-  const opensWithDependentWord = /^(and|but|so|because|which|that|this|it|however|therefore)\b/i.test(trimmed);
+  const opensWithDependentWord = /^(and|but|so|because|which|however|therefore|also|then)\b/i.test(trimmed);
   const endsCleanly = /[.!?]["')\]]?$/.test(trimmed);
 
   let score = 100;
