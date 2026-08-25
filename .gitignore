@@ -35,8 +35,9 @@ coverage/
 
 # Media / uploads / processing artifacts (never commit user content)
 uploads/
+/backend/storage/uploads/*
+/backend/storage/tmp/*
 tmp/
-storage/
 *.mp4
 *.mov
 *.mkv
