@@ -5,11 +5,15 @@ const config = require('../config');
 function signAccessToken(user) {
   return jwt.sign({ sub: user.id, email: user.email }, config.auth.accessSecret, {
     expiresIn: config.auth.accessExpiresIn,
+    algorithm: 'HS256',
   });
 }
 
 function verifyAccessToken(token) {
-  return jwt.verify(token, config.auth.accessSecret);
+  // Explicitly restrict accepted algorithms rather than relying on the
+  // library default — prevents an algorithm-confusion attack where a
+  // token crafted with a different algorithm (e.g. "none") is presented.
+  return jwt.verify(token, config.auth.accessSecret, { algorithms: ['HS256'] });
 }
 
 /**
