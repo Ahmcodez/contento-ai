@@ -10,9 +10,10 @@ export default function Tabs({ tabs, active, onChange, className = '' }) {
             key={tab.id}
             role="tab"
             aria-selected={isActive}
+            disabled={tab.disabled}
             onClick={() => onChange(tab.id)}
-            className={`relative px-4 py-2.5 text-sm font-medium transition-colors
-              ${isActive ? 'text-paper' : 'text-slate hover:text-paper'}`}
+            className={`relative px-4 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-35
+              ${isActive ? 'text-paper' : 'text-slate hover:text-paper disabled:hover:text-slate'}`}
           >
             {tab.label}
             {tab.count !== undefined && (
