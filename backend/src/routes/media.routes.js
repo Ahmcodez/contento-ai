@@ -9,8 +9,6 @@ const { mediaIdParam } = require('../validation/uploadSchemas');
 
 const router = express.Router();
 
-router.use(requireAuth);
-
 function handleUploadErrors(req, res, next) {
   upload.single('video')(req, res, (err) => {
     if (err) {
@@ -23,7 +21,12 @@ function handleUploadErrors(req, res, next) {
   });
 }
 
-router.post('/projects/:id/media', validate(idParam), handleUploadErrors, controller.upload);
-router.get('/media/:mediaAssetId', validate(mediaIdParam), controller.getOne);
+// requireAuth is applied per-route, not via router.use(), because this
+// router is mounted at the bare /api/v1 prefix (its paths don't share a
+// single sub-prefix). A blanket router.use(requireAuth) here would
+// intercept every unmatched /api/v1/* request with a 401 before it ever
+// reaches the 404 handler.
+router.post('/projects/:id/media', requireAuth, validate(idParam), handleUploadErrors, controller.upload);
+router.get('/media/:mediaAssetId', requireAuth, validate(mediaIdParam), controller.getOne);
 
 module.exports = router;
