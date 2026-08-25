@@ -13,6 +13,9 @@ const authRoutes = require('./routes/auth.routes');
 const projectRoutes = require('./routes/project.routes');
 const mediaRoutes = require('./routes/media.routes');
 const jobRoutes = require('./routes/job.routes');
+const clipRoutes = require('./routes/clip.routes');
+const contentRoutes = require('./routes/content.routes');
+const usageRoutes = require('./routes/usage.routes');
 
 function createApp() {
   const app = express();
@@ -54,6 +57,9 @@ function createApp() {
   app.use('/api/v1/projects', projectRoutes);
   app.use('/api/v1', mediaRoutes);
   app.use('/api/v1', jobRoutes);
+  app.use('/api/v1', clipRoutes);
+  app.use('/api/v1', contentRoutes);
+  app.use('/api/v1', usageRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
