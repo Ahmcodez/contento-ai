@@ -26,6 +26,39 @@ async function listForWorkspaces(workspaceIds, { status, page = 1, pageSize = 20
     .offset((page - 1) * pageSize);
 
   const [rows, countResult] = await Promise.all([rowsQuery, countQuery]);
+
+  // Attach each project's most recently created processing job (if any)
+  // so dashboard/list views can show real status instead of nothing —
+  // one extra query, not N+1, since it's scoped to just this page's ids.
+  if (rows.length > 0) {
+    const projectIds = rows.map((r) => r.id);
+    const latestJobs = await db('processing_jobs')
+      .join('media_assets', 'media_assets.id', 'processing_jobs.media_asset_id')
+      .whereIn('media_assets.project_id', projectIds)
+      .select(
+        'media_assets.project_id',
+        'processing_jobs.id',
+        'processing_jobs.state',
+        'processing_jobs.progress_percent',
+        'processing_jobs.created_at',
+      )
+      .orderBy('processing_jobs.created_at', 'desc');
+
+    const latestByProject = new Map();
+    for (const job of latestJobs) {
+      if (!latestByProject.has(job.project_id)) {
+        latestByProject.set(job.project_id, job);
+      }
+    }
+
+    for (const row of rows) {
+      const latest = latestByProject.get(row.id);
+      row.latest_job = latest
+        ? { id: latest.id, state: latest.state, progressPercent: latest.progress_percent }
+        : null;
+    }
+  }
+
   return { rows, total: Number(countResult.count) };
 }
 
