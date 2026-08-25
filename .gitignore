@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Testing
+coverage/
+
+# Media / uploads / processing artifacts (never commit user content)
+uploads/
+tmp/
+storage/
+*.mp4
+*.mov
+*.mkv
+*.mp3
+*.wav
+
+# Misc
+*.pid
+*.seed
+*.pid.lock
