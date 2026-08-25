@@ -1,50 +1,55 @@
 const logger = require('../../logger');
+const db = require('../../db/client');
 const processingJobRepository = require('../../repositories/processingJob.repository');
+const contentAnalysisRepository = require('../../repositories/contentAnalysis.repository');
+const transcriptService = require('../../services/transcript.service');
+const clipDetectionService = require('../../services/clipDetection.service');
 const { getAIProvider } = require('../../ai');
 const { AIProviderError } = require('../../ai/AIProvider');
+const { QUEUE_NAMES, RETRY_CONFIG, getQueue } = require('../../queue/queues');
 
-const CLIP_CANDIDATE_SCHEMA = {
-  type: 'object',
-  properties: {
-    clips: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          startMs: { type: 'number' },
-          endMs: { type: 'number' },
-          title: { type: 'string' },
-          rationale: { type: 'string' },
-        },
-        required: ['startMs', 'endMs', 'title'],
-      },
-    },
-  },
-  required: ['clips'],
-};
+function rowToAnalysis(row) {
+  return {
+    summary: row.summary,
+    topics: row.topics,
+    keyPoints: row.key_points,
+    stories: row.stories,
+    strongOpinions: row.strong_opinions,
+    educationalMoments: row.educational_moments,
+    surprisingStatements: row.surprising_statements,
+    questions: row.questions,
+    conclusions: row.conclusions,
+    memorableQuotes: row.memorable_quotes,
+    selfContainedIdeas: row.self_contained_ideas,
+  };
+}
 
 /**
- * Detects clip candidates via the AI provider. Persistence into
- * clip_candidates (and the deterministic clamping/merging/limit-
- * enforcement pass described in docs/AI.md §4) lands in the milestone
- * that builds the clip review UI (docs/SUMMARY.md milestone 7) — this
- * processor proves the queue -> AI provider -> state-transition hop for
- * this stage without a schema that doesn't exist yet in this milestone.
+ * Detects, scores, and persists clip candidates. CLIPS_FOUND and
+ * CLIPS_SCORED (docs/PIPELINE.md §3.6-3.7) are both traversed here rather
+ * than as separate queue hops — scoring is deterministic and already
+ * computed as part of processClipCandidates (src/clips/candidates.js),
+ * so there's no real work for a separate clips.score job to do; the
+ * state machine still records both transitions for accurate status/history.
  */
 async function processClipsDetect(job) {
-  const { processingJobId, mediaAssetId, fullText, analysis } = job.data;
+  const { processingJobId, mediaAssetId } = job.data;
 
   await processingJobRepository.transitionState(processingJobId, {
     fromState: 'ANALYZED',
     toState: 'FINDING_CLIPS',
   });
 
+  const mediaAsset = await db('media_assets').where({ id: mediaAssetId }).first();
+  const userId = mediaAsset.uploaded_by;
+  const transcript = await transcriptService.getNormalizedTranscript(mediaAssetId);
+  const analysisRow = await contentAnalysisRepository.findByProcessingJobId(processingJobId);
+  const analysis = rowToAnalysis(analysisRow);
   const provider = getAIProvider();
-  const prompt = `Given this transcript and analysis, identify the 3-10 most compelling short-form clip moments (15-90 seconds each). Analysis summary: ${analysis?.summary || ''}\n\nTranscript:\n${fullText}`;
 
-  let result;
+  let candidates;
   try {
-    result = await provider.generateStructuredOutput({ prompt, schema: CLIP_CANDIDATE_SCHEMA, maxTokens: 2048 });
+    candidates = await clipDetectionService.detectClips({ provider, transcript, analysis, userId, processingJobId });
   } catch (err) {
     if (err instanceof AIProviderError && !err.retryable) {
       await processingJobRepository.transitionState(processingJobId, {
@@ -62,11 +67,24 @@ async function processClipsDetect(job) {
   await processingJobRepository.transitionState(processingJobId, {
     fromState: 'FINDING_CLIPS',
     toState: 'CLIPS_FOUND',
-    progressPercent: 65,
-    metadata: { candidateCount: result.data.clips?.length || 0 },
+    metadata: { candidateCount: candidates.length },
   });
 
-  logger.info({ processingJobId, mediaAssetId }, 'clips.detect completed (downstream stages pending milestone 7)');
+  const persisted = await clipDetectionService.persistClips(processingJobId, candidates);
+
+  await processingJobRepository.transitionState(processingJobId, {
+    fromState: 'CLIPS_FOUND',
+    toState: 'CLIPS_SCORED',
+    progressPercent: 65,
+  });
+
+  await getQueue(QUEUE_NAMES.CLIP_RENDER).add(
+    'clip.render',
+    { processingJobId, mediaAssetId, clipCandidateIds: persisted.map((c) => c.id) },
+    { ...RETRY_CONFIG[QUEUE_NAMES.CLIP_RENDER], removeOnComplete: 100, removeOnFail: 500 },
+  );
+
+  logger.info({ processingJobId, mediaAssetId, clipCount: persisted.length }, 'clips.detect completed');
 }
 
 module.exports = processClipsDetect;
