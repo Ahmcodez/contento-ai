@@ -1,0 +1,36 @@
+import Link from 'next/link';
+import Button from '@/components/ui/Button';
+import TimelineRuler from '@/components/ui/TimelineRuler';
+
+export default function Hero() {
+  return (
+    <section className="mx-auto max-w-6xl px-6 pb-20 pt-20 sm:pt-28">
+      <p className="text-[13px] font-medium uppercase tracking-[0.1em] text-tally">Content repurposing</p>
+      <h1 className="mt-4 max-w-3xl font-display text-5xl leading-[1.05] tracking-tightest text-paper sm:text-6xl">
+        Turn one long video into <em className="not-italic text-tally">everything</em> your audience needs.
+      </h1>
+      <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-slate">
+        Upload a podcast, talk, or long-form video. Contento transcribes it, finds the moments worth
+        clipping, ranks them, renders vertical clips with captions, and writes the blog post, social
+        copy, and description — grounded in what was actually said.
+      </p>
+      <div className="mt-8 flex items-center gap-4">
+        <Link href="/signup">
+          <Button size="lg">Start free</Button>
+        </Link>
+        <a href="#how-it-works" className="text-sm text-slate hover:text-paper">
+          See how it works →
+        </a>
+      </div>
+
+      <div className="mt-20">
+        <TimelineRuler marks={24} />
+        <div className="mt-2 flex justify-between font-mono text-[11px] tabular text-slate-dim">
+          <span>00:00:00</span>
+          <span>00:24:00</span>
+          <span>00:48:00</span>
+        </div>
+      </div>
+    </section>
+  );
+}
