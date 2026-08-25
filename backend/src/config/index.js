@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
   PORT: z.coerce.number().int().positive().default(4000),
 
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -61,6 +62,7 @@ function loadConfig() {
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     port: env.PORT,
+    corsOrigins: env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
 
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
