@@ -2,6 +2,7 @@ const { Worker } = require('bullmq');
 const connection = require('../redis/client');
 const config = require('../config');
 const logger = require('../logger');
+const metrics = require('../metrics');
 const db = require('../db/client');
 const processingJobRepository = require('../repositories/processingJob.repository');
 const { QUEUE_NAMES } = require('../queue/queues');
@@ -56,19 +57,36 @@ function startWorkers() {
 }
 
 /**
- * Wraps every processor so an unhandled/retryable-exhausted failure is
- * always recorded as a processing_errors row and the job flipped to
- * FAILED — the DB, not the Redis failed set, is the durable source of
- * truth a user's job actually needs (docs/QUEUE.md §4).
+ * Wraps every processor with:
+ *  - structured start/complete/fail logging carrying processingJobId,
+ *    stage, and duration on every line (docs/OPERATIONS.md logging spec)
+ *  - metrics counters/duration samples (src/metrics)
+ *  - persistence of a terminal failure to processing_errors + FAILED
+ *    state, so the DB (not the Redis failed set) is the durable source
+ *    of truth a user's job actually needs (docs/QUEUE.md §4)
  */
 function wrapWithErrorPersistence(queueName, handler) {
   return async (job) => {
+    const { processingJobId } = job.data;
+    const stageLogger = logger.child({ stage: queueName, jobId: job.id, processingJobId });
+    const startedAt = Date.now();
+
+    stageLogger.info('stage started');
+
     try {
       await handler(job);
+      const durationMs = Date.now() - startedAt;
+      metrics.recordDuration(queueName, durationMs);
+      metrics.increment('stage_completed', { stage: queueName });
+      stageLogger.info({ durationMs }, 'stage completed');
     } catch (err) {
+      const durationMs = Date.now() - startedAt;
+      metrics.recordDuration(queueName, durationMs);
+      metrics.increment('stage_failed', { stage: queueName });
+      stageLogger.error({ durationMs, err: err.message, attemptsMade: job.attemptsMade }, 'stage failed');
+
       const isLastAttempt = job.attemptsMade + 1 >= (job.opts.attempts || 1);
       if (isLastAttempt) {
-        const { processingJobId } = job.data;
         if (processingJobId) {
           await db('processing_errors').insert({
             processing_job_id: processingJobId,
@@ -87,6 +105,7 @@ function wrapWithErrorPersistence(queueName, handler) {
             });
           }
         }
+        metrics.increment('job_failed_terminal', { stage: queueName });
       }
       throw err; // rethrow so BullMQ still records the failure/retry correctly
     }
