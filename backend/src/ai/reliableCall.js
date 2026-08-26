@@ -2,6 +2,7 @@ const { AIProviderError } = require('./AIProvider');
 const config = require('../config');
 const usageService = require('../services/usage.service');
 const logger = require('../logger');
+const metrics = require('../metrics');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -82,6 +83,7 @@ async function callStructured({
         { attempt, maxAttempts, retryable, reason: isProviderError ? err.reason : 'unexpected_error', message: err.message },
         'AI structured call attempt failed',
       );
+      metrics.increment('ai_provider_error', { reason: isProviderError ? err.reason : 'unexpected_error' });
 
       if (!retryable || attempt === maxAttempts) {
         throw err;
@@ -115,6 +117,8 @@ async function callText({ provider, prompt, systemPrompt, maxTokens, userId, pro
       lastError = err;
       const isProviderError = err instanceof AIProviderError;
       const retryable = isProviderError ? err.retryable : true;
+
+      metrics.increment('ai_provider_error', { reason: isProviderError ? err.reason : 'unexpected_error' });
 
       if (!retryable || attempt === maxAttempts) {
         throw err;
