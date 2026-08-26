@@ -2,6 +2,8 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const StorageDriver = require('./StorageDriver');
+const metrics = require('../metrics');
+const logger = require('../logger');
 
 class LocalDiskStorageDriver extends StorageDriver {
   constructor(rootPath) {
@@ -24,14 +26,31 @@ class LocalDiskStorageDriver extends StorageDriver {
 
   async saveFromPath(key, sourcePath) {
     const dest = this.resolveKey(key);
-    await fsp.mkdir(path.dirname(dest), { recursive: true });
-    await fsp.copyFile(sourcePath, dest);
-    return key;
+    try {
+      await fsp.mkdir(path.dirname(dest), { recursive: true });
+      await fsp.copyFile(sourcePath, dest);
+      return key;
+    } catch (err) {
+      metrics.increment('storage_error', { operation: 'saveFromPath' });
+      logger.error({ err: err.message, key }, 'storage: saveFromPath failed');
+      throw err;
+    }
   }
 
   async getReadStream(key) {
+    // Note: fs.createReadStream does not throw synchronously for a
+    // missing/unreadable file — that surfaces as an async 'error' event
+    // on the returned stream. Callers (e.g. clip.controller.js) listen
+    // for that event and record storage_error there; this try/catch only
+    // covers the rarer synchronous failure (e.g. an invalid path).
     const abs = this.resolveKey(key);
-    return fs.createReadStream(abs);
+    try {
+      return fs.createReadStream(abs);
+    } catch (err) {
+      metrics.increment('storage_error', { operation: 'getReadStream' });
+      logger.error({ err: err.message, key }, 'storage: getReadStream failed synchronously');
+      throw err;
+    }
   }
 
   async getAbsolutePath(key) {
