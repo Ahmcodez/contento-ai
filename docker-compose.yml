@@ -1,0 +1,81 @@
+version: '3.9'
+
+# Development environment only — see docs/DEPLOYMENT.md for the
+# production architecture, which does not reuse this file as-is
+# (managed Postgres/Redis, no bind mounts, no nodemon).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: contento
+      POSTGRES_PASSWORD: contento
+      POSTGRES_DB: contento_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - contento_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U contento -d contento_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    command: npx nodemon --watch src src/server.js
+    env_file: ./backend/.env
+    environment:
+      # Override networking-specific values only — everything else
+      # (secrets, AI keys, limits) comes from backend/.env, same file
+      # used for non-Docker local development.
+      DATABASE_URL: postgres://contento:contento@postgres:5432/contento_dev
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '4000:4000'
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/migrations:/app/migrations
+      - ./backend/scripts:/app/scripts
+      - contento_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ./backend
+    command: npx nodemon --watch src src/worker.js
+    env_file: ./backend/.env
+    environment:
+      DATABASE_URL: postgres://contento:contento@postgres:5432/contento_dev
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/migrations:/app/migrations
+      - ./backend/scripts:/app/scripts
+      - contento_storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  contento_pgdata:
+  # Shared between backend and worker — the API writes an uploaded file,
+  # the worker reads it back for ffmpeg/transcription; both must see the
+  # same filesystem since the local-disk StorageDriver has no concept of
+  # cross-container access on its own.
+  contento_storage:
