@@ -1,5 +1,6 @@
 const AppError = require('../utils/AppError');
 const logger = require('../logger');
+const metrics = require('../metrics');
 
 function notFoundHandler(req, res, next) {
   next(AppError.notFound(`Route not found: ${req.method} ${req.originalUrl}`));
@@ -33,6 +34,7 @@ function errorHandler(err, req, res, next) {
   } else {
     logger.warn(logPayload, 'Request error');
   }
+  metrics.increment('api_error', { statusCode, code });
 
   const body = { error: { code, message } };
   if (isAppError && err.detail && statusCode < 500) {
