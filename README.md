@@ -29,6 +29,9 @@ development milestones. Full detail:
 - [`docs/COST.md`](docs/COST.md) — cost/quota architecture
 - [`docs/SECURITY.md`](docs/SECURITY.md) — security architecture
 - [`docs/SCALABILITY.md`](docs/SCALABILITY.md) — scaling path
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — environment variables and dev/test/prod separation
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Docker, production architecture, hosting recommendations
+- [`docs/BACKUP.md`](docs/BACKUP.md) — backup and recovery strategy
 - [`docs/adr/`](docs/adr/) — architecture decision records
 
 ## Core workflow
