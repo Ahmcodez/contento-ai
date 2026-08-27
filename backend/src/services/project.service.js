@@ -2,12 +2,14 @@ const AppError = require('../utils/AppError');
 const projectRepository = require('../repositories/project.repository');
 const mediaAssetRepository = require('../repositories/mediaAsset.repository');
 const workspaceService = require('./workspace.service');
+const quotaService = require('./quota.service');
 
 async function createProject(userId, { title, description }) {
   const workspace = await workspaceService.getPersonalWorkspace(userId);
   if (!workspace) {
     throw AppError.internal('No workspace found for user');
   }
+  await quotaService.assertCanCreateProject(userId);
   return projectRepository.create({ workspaceId: workspace.id, title, description, createdBy: userId });
 }
 
