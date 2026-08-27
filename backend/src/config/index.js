@@ -39,6 +39,8 @@ const envSchema = z.object({
   MAX_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(10),
   MAX_AI_REQUESTS_PER_USER_PER_DAY: z.coerce.number().int().positive().default(50),
   MAX_PROCESSING_JOBS_PER_USER_CONCURRENT: z.coerce.number().int().positive().default(2),
+  MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
+  MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH: z.coerce.number().int().positive().default(300),
 
   MAX_TRANSCRIPT_CHARS_PER_AI_CALL: z.coerce.number().int().positive().default(12000),
   MAX_TRANSCRIPT_CHUNKS: z.coerce.number().int().positive().default(8),
@@ -141,6 +143,8 @@ function loadConfig() {
       maxClipsPerVideo: env.MAX_CLIPS_PER_VIDEO,
       maxAiRequestsPerUserPerDay: env.MAX_AI_REQUESTS_PER_USER_PER_DAY,
       maxProcessingJobsPerUserConcurrent: env.MAX_PROCESSING_JOBS_PER_USER_CONCURRENT,
+      maxProjectsPerUser: env.MAX_PROJECTS_PER_USER,
+      maxProcessingMinutesPerUserPerMonth: env.MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH,
       maxTranscriptCharsPerAiCall: env.MAX_TRANSCRIPT_CHARS_PER_AI_CALL,
       maxTranscriptChunks: env.MAX_TRANSCRIPT_CHUNKS,
       maxAiCallsPerJob: env.MAX_AI_CALLS_PER_JOB,
