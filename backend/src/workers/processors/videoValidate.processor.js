@@ -5,6 +5,7 @@ const mediaAssetRepository = require('../../repositories/mediaAsset.repository')
 const processingJobRepository = require('../../repositories/processingJob.repository');
 const { getStorageDriver } = require('../../storage');
 const mediaProcessor = require('../../media/MediaProcessor');
+const quotaService = require('../../services/quota.service');
 const { QUEUE_NAMES, RETRY_CONFIG, getQueue } = require('../../queue/queues');
 
 /**
@@ -48,6 +49,19 @@ async function processVideoValidate(job) {
     await rejectAsset(processingJobId, mediaAssetId, 'Video has no audio track — an audio track is required for transcription and content generation');
     return;
   }
+
+  // Monthly processing-minutes budget is only checkable once the real
+  // duration is known (ffprobe, above) — enforced here, before any real
+  // compute (audio extraction, transcription, AI calls) begins, rather
+  // than after the fact.
+  const durationMinutes = probeResult.durationSeconds / 60;
+  try {
+    await quotaService.assertWithinMonthlyProcessingMinutes(mediaAsset.uploaded_by, durationMinutes);
+  } catch (err) {
+    await rejectAsset(processingJobId, mediaAssetId, err.message);
+    return;
+  }
+  await quotaService.recordProcessingMinutes(mediaAsset.uploaded_by, processingJobId, durationMinutes);
 
   await mediaAssetRepository.updateById(mediaAssetId, {
     status: 'validated',
