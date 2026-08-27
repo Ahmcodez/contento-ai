@@ -6,6 +6,7 @@ const { buildCaptionCues, cuesToSrt } = require('../media/CaptionGenerator');
 const { segmentsInRange } = require('../transcript/normalize');
 const { getStorageDriver } = require('../storage');
 const generatedClipRepository = require('../repositories/generatedClip.repository');
+const quotaService = require('./quota.service');
 
 /**
  * Renders one approved clip candidate to a 9:16 video with burned-in
@@ -60,6 +61,8 @@ async function renderClip({ mediaAsset, transcriptSegments, clipCandidate }) {
       subtitleStorageKey,
       durationSeconds: validated.durationSeconds,
     });
+
+    await quotaService.recordClipRendered(mediaAsset.uploaded_by, clipCandidate.processing_job_id);
 
     return generatedClip;
   } catch (err) {
