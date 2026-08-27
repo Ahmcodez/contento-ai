@@ -21,9 +21,18 @@ const envSchema = z.object({
 
   TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'none']).default('none'),
 
-  STORAGE_DRIVER: z.enum(['local']).default('local'),
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_PATH: z.string().default('./storage/uploads'),
   STORAGE_TMP_PATH: z.string().default('./storage/tmp'),
+
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  // Set for any non-AWS S3-compatible provider (Backblaze B2, Cloudflare
+  // R2, MinIO). Leave unset for real AWS S3.
+  S3_ENDPOINT: z.string().optional(),
+  S3_FORCE_PATH_STYLE: z.coerce.boolean().default(false),
 
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(500),
   MAX_VIDEO_DURATION_SECONDS: z.coerce.number().int().positive().default(3600),
@@ -74,6 +83,18 @@ function loadConfig() {
 
   const env = parsed.data;
 
+  // Cross-field validation zod's schema alone can't express cleanly:
+  // fail fast at boot, not mid-upload, if the storage driver is
+  // misconfigured (mirrors the same fail-fast principle already applied
+  // to AI provider config — see docs/COST.md §4).
+  if (env.STORAGE_DRIVER === 's3' && !env.S3_BUCKET) {
+    // eslint-disable-next-line no-console
+    console.error('Invalid environment configuration:');
+    // eslint-disable-next-line no-console
+    console.error('  - S3_BUCKET is required when STORAGE_DRIVER=s3');
+    process.exit(1);
+  }
+
   return {
     env: env.NODE_ENV,
     isProduction: env.NODE_ENV === 'production',
@@ -104,6 +125,14 @@ function loadConfig() {
       driver: env.STORAGE_DRIVER,
       localPath: env.STORAGE_LOCAL_PATH,
       tmpPath: env.STORAGE_TMP_PATH,
+      s3: {
+        bucket: env.S3_BUCKET,
+        region: env.S3_REGION,
+        accessKeyId: env.S3_ACCESS_KEY_ID,
+        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+        endpoint: env.S3_ENDPOINT,
+        forcePathStyle: env.S3_FORCE_PATH_STYLE,
+      },
     },
 
     limits: {
