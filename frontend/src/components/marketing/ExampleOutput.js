@@ -25,7 +25,7 @@ export default function ExampleOutput() {
               {EXAMPLE_CLIPS.map((clip) => (
                 <div
                   key={clip.title}
-                  className="flex items-center justify-between rounded-[4px] border border-line-dark p-4"
+                  className="flex items-center justify-between rounded-lg border border-line-dark p-4"
                 >
                   <div>
                     <p className="text-sm text-paper">{clip.title}</p>
@@ -41,7 +41,7 @@ export default function ExampleOutput() {
             <h3 className="mb-4 text-[13px] font-medium uppercase tracking-[0.06em] text-slate-dim">
               Grounded written content
             </h3>
-            <div className="rounded-[4px] border border-line-dark p-5">
+            <div className="rounded-lg border border-line-dark p-5">
               <span className="text-[11px] uppercase tracking-[0.06em] text-tally">LinkedIn</span>
               <p className="mt-3 text-[14px] leading-relaxed text-paper/90">
                 Most people think talent is the deciding factor in whether a startup survives its first

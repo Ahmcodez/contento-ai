@@ -16,7 +16,7 @@ export default function HowItWorks() {
           One upload runs through a real pipeline — every stage produces something you can inspect.
         </p>
 
-        <div className="mt-12 grid grid-cols-1 gap-px overflow-hidden rounded-[4px] border border-line-dark bg-line-dark sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-12 grid grid-cols-1 gap-px overflow-hidden rounded-lg border border-line-dark bg-line-dark sm:grid-cols-2 lg:grid-cols-3">
           {STAGES.map((stage, i) => (
             <div key={stage.label} className="bg-ink p-6">
               <span className="font-mono text-[12px] tabular text-tally">{String(i + 1).padStart(2, '0')}</span>

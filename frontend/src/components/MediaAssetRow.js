@@ -29,8 +29,9 @@ const STATE_TO_GROUP = {
 };
 
 export default function MediaAssetRow({ projectId, asset }) {
+  const isLinked = Boolean(asset.latestJob);
   const content = (
-    <Card className="flex items-center justify-between gap-4 p-4 transition-colors hover:border-slate">
+    <Card interactive={isLinked} className="flex items-center justify-between gap-4 p-4">
       <div className="min-w-0">
         <p className="truncate text-sm text-paper">{asset.originalFilename}</p>
         <div className="mt-1 flex items-center gap-3 text-[12px] text-slate-dim">
@@ -42,7 +43,7 @@ export default function MediaAssetRow({ projectId, asset }) {
     </Card>
   );
 
-  if (!asset.latestJob) return content;
+  if (!isLinked) return content;
 
   return <Link href={`/projects/${projectId}/jobs/${asset.latestJob.id}`}>{content}</Link>;
 }
