@@ -44,9 +44,13 @@ export default function ContentEditor({ jobId, content, onChange }) {
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(body);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+    try {
+      await navigator.clipboard.writeText(body);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError('Could not copy to clipboard. Your browser may be blocking clipboard access.');
+    }
   }
 
   return (
@@ -96,7 +100,7 @@ export default function ContentEditor({ jobId, content, onChange }) {
         </div>
       )}
 
-      {error && <p className="mt-2 text-[13px] text-tally">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-[13px] text-tally">{error}</p>}
 
       {/* No export-as-file endpoint exists yet (GET /content/:id/export) —
           copy-to-clipboard above is the real, working substitute rather
