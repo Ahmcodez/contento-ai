@@ -2,12 +2,12 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const crypto = require('crypto');
 const path = require('path');
-const { fromFile } = require('file-type');
 const { ulid } = require('ulid');
 
 const db = require('../db/client');
 const AppError = require('../utils/AppError');
 const { sanitizeDisplayFilename, extensionFromFilename } = require('../utils/sanitize');
+const { detectVideoContainer } = require('../utils/detectVideoContainer');
 const { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } = require('../validation/uploadSchemas');
 const { getStorageDriver } = require('../storage');
 const projectRepository = require('../repositories/project.repository');
@@ -51,8 +51,11 @@ async function uploadMedia(userId, projectId, file) {
     }
 
     // Real content check: sniff the actual file bytes, never trust the
-    // client-supplied Content-Type header alone.
-    const detected = await fromFile(file.path);
+    // client-supplied Content-Type header alone. Uses a small in-house
+    // sniffer scoped to exactly the 4 formats this app accepts, rather
+    // than a general-purpose "detect anything" library — see
+    // src/utils/detectVideoContainer.js for why (GHSA-5v7r-6r5c-r473).
+    const detected = await detectVideoContainer(file.path);
     const detectedMime = detected?.mime;
     if (!detectedMime || !ALLOWED_MIME_TYPES.has(detectedMime)) {
       throw AppError.unsupportedMediaType(
