@@ -23,6 +23,12 @@ function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  // Must be set before any middleware that reads req.ip — the rate
+  // limiter below keys directly off it (src/middleware/rateLimiter.js).
+  // See the TRUST_PROXY doc comment in src/config/index.js for what this
+  // controls and why getting it wrong in either direction is a real
+  // problem, not just a config nicety.
+  app.set('trust proxy', config.trustProxy);
   app.use(helmet());
   app.use(
     cors({

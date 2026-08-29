@@ -7,6 +7,24 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   PORT: z.coerce.number().int().positive().default(4000),
 
+  // Express's `trust proxy` setting — see docs/SECURITY.md §6 and
+  // docs/DEPLOYMENT.md before changing this. Controls what req.ip
+  // resolves to, which per-IP rate limiting (src/middleware/rateLimiter.js)
+  // depends on directly. Accepts: 'false' (no proxy — trust the direct
+  // socket address only; the safe default for local/Docker dev, where
+  // there is no reverse proxy in front of the app), a positive integer
+  // (the number of reverse-proxy hops in front of the app to trust — set
+  // this to match the real deployment topology in production, e.g. '1'
+  // for a single load balancer), or any other Express-recognized value
+  // ('true', 'loopback', a specific IP/CIDR, etc.). Left unconfigured
+  // (i.e. 'false') in production, every request appears to come from the
+  // load balancer's IP, so per-IP auth rate limiting silently stops
+  // working — either every user shares one bucket, or none of them do.
+  // Set too permissively ('true' when the app is directly internet-
+  // facing), the client-supplied X-Forwarded-For header becomes
+  // spoofable, which defeats the same rate limiting the other way.
+  TRUST_PROXY: z.string().default('false'),
+
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
@@ -70,6 +88,22 @@ const envSchema = z.object({
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
 });
 
+/**
+ * Mirrors Express's own accepted `trust proxy` value types (see
+ * https://expressjs.com/en/guide/behind-proxies.html) so operators can
+ * use the exact same values they'd pass to `app.set('trust proxy', ...)`
+ * directly, via a plain string env var. 'false'/'true' are parsed to
+ * real booleans; anything that parses cleanly as a non-negative integer
+ * becomes a number (hop count); everything else (e.g. 'loopback', a
+ * specific IP/CIDR) is passed through unchanged.
+ */
+function parseTrustProxy(value) {
+  if (value === 'false') return false;
+  if (value === 'true') return true;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value;
+}
+
 function loadConfig() {
   const parsed = envSchema.safeParse(process.env);
 
@@ -103,6 +137,7 @@ function loadConfig() {
     isTest: env.NODE_ENV === 'test',
     port: env.PORT,
     corsOrigins: env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
 
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
