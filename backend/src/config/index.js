@@ -7,6 +7,24 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   PORT: z.coerce.number().int().positive().default(4000),
 
+  // Express's `trust proxy` setting — see docs/SECURITY.md §6 and
+  // docs/DEPLOYMENT.md before changing this. Controls what req.ip
+  // resolves to, which per-IP rate limiting (src/middleware/rateLimiter.js)
+  // depends on directly. Accepts: 'false' (no proxy — trust the direct
+  // socket address only; the safe default for local/Docker dev, where
+  // there is no reverse proxy in front of the app), a positive integer
+  // (the number of reverse-proxy hops in front of the app to trust — set
+  // this to match the real deployment topology in production, e.g. '1'
+  // for a single load balancer), or any other Express-recognized value
+  // ('true', 'loopback', a specific IP/CIDR, etc.). Left unconfigured
+  // (i.e. 'false') in production, every request appears to come from the
+  // load balancer's IP, so per-IP auth rate limiting silently stops
+  // working — either every user shares one bucket, or none of them do.
+  // Set too permissively ('true' when the app is directly internet-
+  // facing), the client-supplied X-Forwarded-For header becomes
+  // spoofable, which defeats the same rate limiting the other way.
+  TRUST_PROXY: z.string().default('false'),
+
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
   REDIS_URL: z.string().min(1, 'REDIS_URL is required'),
@@ -21,15 +39,26 @@ const envSchema = z.object({
 
   TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'none']).default('none'),
 
-  STORAGE_DRIVER: z.enum(['local']).default('local'),
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_PATH: z.string().default('./storage/uploads'),
   STORAGE_TMP_PATH: z.string().default('./storage/tmp'),
+
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  // Set for any non-AWS S3-compatible provider (Backblaze B2, Cloudflare
+  // R2, MinIO). Leave unset for real AWS S3.
+  S3_ENDPOINT: z.string().optional(),
+  S3_FORCE_PATH_STYLE: z.coerce.boolean().default(false),
 
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(500),
   MAX_VIDEO_DURATION_SECONDS: z.coerce.number().int().positive().default(3600),
   MAX_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(10),
   MAX_AI_REQUESTS_PER_USER_PER_DAY: z.coerce.number().int().positive().default(50),
   MAX_PROCESSING_JOBS_PER_USER_CONCURRENT: z.coerce.number().int().positive().default(2),
+  MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
+  MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH: z.coerce.number().int().positive().default(300),
 
   MAX_TRANSCRIPT_CHARS_PER_AI_CALL: z.coerce.number().int().positive().default(12000),
   MAX_TRANSCRIPT_CHUNKS: z.coerce.number().int().positive().default(8),
@@ -59,6 +88,22 @@ const envSchema = z.object({
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
 });
 
+/**
+ * Mirrors Express's own accepted `trust proxy` value types (see
+ * https://expressjs.com/en/guide/behind-proxies.html) so operators can
+ * use the exact same values they'd pass to `app.set('trust proxy', ...)`
+ * directly, via a plain string env var. 'false'/'true' are parsed to
+ * real booleans; anything that parses cleanly as a non-negative integer
+ * becomes a number (hop count); everything else (e.g. 'loopback', a
+ * specific IP/CIDR) is passed through unchanged.
+ */
+function parseTrustProxy(value) {
+  if (value === 'false') return false;
+  if (value === 'true') return true;
+  if (/^\d+$/.test(value)) return Number(value);
+  return value;
+}
+
 function loadConfig() {
   const parsed = envSchema.safeParse(process.env);
 
@@ -74,12 +119,25 @@ function loadConfig() {
 
   const env = parsed.data;
 
+  // Cross-field validation zod's schema alone can't express cleanly:
+  // fail fast at boot, not mid-upload, if the storage driver is
+  // misconfigured (mirrors the same fail-fast principle already applied
+  // to AI provider config — see docs/COST.md §4).
+  if (env.STORAGE_DRIVER === 's3' && !env.S3_BUCKET) {
+    // eslint-disable-next-line no-console
+    console.error('Invalid environment configuration:');
+    // eslint-disable-next-line no-console
+    console.error('  - S3_BUCKET is required when STORAGE_DRIVER=s3');
+    process.exit(1);
+  }
+
   return {
     env: env.NODE_ENV,
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     port: env.PORT,
     corsOrigins: env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
 
     databaseUrl: env.DATABASE_URL,
     redisUrl: env.REDIS_URL,
@@ -104,6 +162,14 @@ function loadConfig() {
       driver: env.STORAGE_DRIVER,
       localPath: env.STORAGE_LOCAL_PATH,
       tmpPath: env.STORAGE_TMP_PATH,
+      s3: {
+        bucket: env.S3_BUCKET,
+        region: env.S3_REGION,
+        accessKeyId: env.S3_ACCESS_KEY_ID,
+        secretAccessKey: env.S3_SECRET_ACCESS_KEY,
+        endpoint: env.S3_ENDPOINT,
+        forcePathStyle: env.S3_FORCE_PATH_STYLE,
+      },
     },
 
     limits: {
@@ -112,6 +178,8 @@ function loadConfig() {
       maxClipsPerVideo: env.MAX_CLIPS_PER_VIDEO,
       maxAiRequestsPerUserPerDay: env.MAX_AI_REQUESTS_PER_USER_PER_DAY,
       maxProcessingJobsPerUserConcurrent: env.MAX_PROCESSING_JOBS_PER_USER_CONCURRENT,
+      maxProjectsPerUser: env.MAX_PROJECTS_PER_USER,
+      maxProcessingMinutesPerUserPerMonth: env.MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH,
       maxTranscriptCharsPerAiCall: env.MAX_TRANSCRIPT_CHARS_PER_AI_CALL,
       maxTranscriptChunks: env.MAX_TRANSCRIPT_CHUNKS,
       maxAiCallsPerJob: env.MAX_AI_CALLS_PER_JOB,

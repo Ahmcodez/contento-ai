@@ -1,5 +1,6 @@
 const { AIProvider, AIProviderError } = require('./AIProvider');
 const { CONTENT_ANALYSIS_JSON_SCHEMA } = require('./schemas');
+const { UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT, delimitTranscript } = require('./promptSafety');
 const config = require('../config');
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -104,9 +105,10 @@ class GeminiProvider extends AIProvider {
   }
 
   async analyzeContent({ transcript }) {
-    const prompt = `Analyze the following video transcript in depth. Identify: an overall summary, key topics, key points, stories told, strong opinions expressed, educational moments, surprising statements, questions raised, conclusions reached, memorable quotes, and self-contained ideas that could stand alone. Include approximate startMs/endMs timestamps where the transcript text suggests them.\n\nTranscript:\n${transcript}`;
+    const prompt = `Analyze the following video transcript in depth. Identify: an overall summary, key topics, key points, stories told, strong opinions expressed, educational moments, surprising statements, questions raised, conclusions reached, memorable quotes, and self-contained ideas that could stand alone. Include approximate startMs/endMs timestamps where the transcript text suggests them.\n\nTranscript:\n${delimitTranscript(transcript)}`;
     const { data, usage } = await this.generateStructuredOutput({
       prompt,
+      systemPrompt: UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT,
       schema: CONTENT_ANALYSIS_JSON_SCHEMA,
       maxTokens: 4096,
     });
@@ -126,8 +128,12 @@ class GeminiProvider extends AIProvider {
       throw new AIProviderError(`Unsupported content type: ${contentType}`, { retryable: false, reason: 'invalid_input' });
     }
 
-    const prompt = `${instruction}\n\nVideo summary: ${analysis?.summary || ''}\nKey topics: ${(analysis?.topics || []).join(', ')}\n\nFull transcript for reference:\n${transcript}`;
-    const { text, usage } = await this.generateText({ prompt, maxTokens: 1500 });
+    const prompt = `${instruction}\n\nVideo summary: ${analysis?.summary || ''}\nKey topics: ${(analysis?.topics || []).join(', ')}\n\nFull transcript for reference:\n${delimitTranscript(transcript)}`;
+    const { text, usage } = await this.generateText({
+      prompt,
+      systemPrompt: UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT,
+      maxTokens: 1500,
+    });
     return { body: text, usage };
   }
 }

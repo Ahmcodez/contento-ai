@@ -2,6 +2,7 @@ const config = require('../config');
 const { chunkTranscript } = require('../transcript/chunk');
 const { contentAnalysisSchema, CONTENT_ANALYSIS_JSON_SCHEMA } = require('../ai/schemas');
 const { callStructured } = require('../ai/reliableCall');
+const { UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT, delimitTranscript } = require('../ai/promptSafety');
 const contentAnalysisRepository = require('../repositories/contentAnalysis.repository');
 
 const ARRAY_FIELDS = [
@@ -18,7 +19,7 @@ const ARRAY_FIELDS = [
 ];
 
 function buildPrompt(chunkText) {
-  return `Analyze the following portion of a video transcript in depth. Identify: key topics, key points, stories told, strong opinions expressed, educational moments, surprising statements, questions raised, conclusions reached, memorable quotes, and self-contained ideas that could stand alone as a short clip. Include approximate startMs/endMs timestamps where the transcript text suggests them (timestamps in this portion are relative to the full video, not this excerpt). Also provide a one-paragraph summary of just this portion.\n\nTranscript portion:\n${chunkText}`;
+  return `Analyze the following portion of a video transcript in depth. Identify: key topics, key points, stories told, strong opinions expressed, educational moments, surprising statements, questions raised, conclusions reached, memorable quotes, and self-contained ideas that could stand alone as a short clip. Include approximate startMs/endMs timestamps where the transcript text suggests them (timestamps in this portion are relative to the full video, not this excerpt). Also provide a one-paragraph summary of just this portion.\n\nTranscript portion:\n${delimitTranscript(chunkText)}`;
 }
 
 /**
@@ -46,6 +47,7 @@ async function analyzeTranscript({ provider, transcript, userId, processingJobId
     const { data } = await callStructured({
       provider,
       prompt: buildPrompt(chunk.text),
+      systemPrompt: UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT,
       jsonSchema: CONTENT_ANALYSIS_JSON_SCHEMA,
       zodSchema: contentAnalysisSchema,
       maxTokens: 4096,

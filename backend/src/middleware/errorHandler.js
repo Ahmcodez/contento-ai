@@ -1,5 +1,6 @@
 const AppError = require('../utils/AppError');
 const logger = require('../logger');
+const metrics = require('../metrics');
 
 function notFoundHandler(req, res, next) {
   next(AppError.notFound(`Route not found: ${req.method} ${req.originalUrl}`));
@@ -25,14 +26,20 @@ function errorHandler(err, req, res, next) {
       ? err.message || 'Request could not be processed'
       : 'Internal server error';
 
+  // Prefer the request-scoped logger (carries requestId, and userId once
+  // authenticated — see middleware/auth.js) over the bare singleton, so
+  // error logs have the same context every other request log line does.
+  const log = req.log || logger;
+
   // Full detail (stack trace, provider payloads) is logged server-side
   // only — never returned to the client.
   const logPayload = { err, statusCode, code, requestId: req.id };
   if (statusCode >= 500) {
-    logger.error(logPayload, 'Unhandled error');
+    log.error(logPayload, 'Unhandled error');
   } else {
-    logger.warn(logPayload, 'Request error');
+    log.warn(logPayload, 'Request error');
   }
+  metrics.increment('api_error', { statusCode, code });
 
   const body = { error: { code, message } };
   if (isAppError && err.detail && statusCode < 500) {

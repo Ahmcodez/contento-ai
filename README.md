@@ -10,9 +10,11 @@ reviewable and exportable from a single dashboard.
 
 ## Status
 
-🚧 Backend foundation implemented and tested (auth, projects, video
-upload, async processing pipeline through clip detection). See
-[`backend/README.md`](backend/README.md) to run it locally.
+🚧 Backend and frontend both implemented and tested — auth, projects,
+video upload, the full async processing pipeline (transcription, AI
+analysis, clip detection/scoring/rendering, written content generation),
+and a complete UI for all of it. See [`backend/README.md`](backend/README.md)
+and [`frontend/README.md`](frontend/README.md) to run it locally.
 
 Architecture design is complete. Start at **[`docs/SUMMARY.md`](docs/SUMMARY.md)** for
 the consolidated architecture overview, diagrams, and the dependency-ordered
@@ -27,6 +29,9 @@ development milestones. Full detail:
 - [`docs/COST.md`](docs/COST.md) — cost/quota architecture
 - [`docs/SECURITY.md`](docs/SECURITY.md) — security architecture
 - [`docs/SCALABILITY.md`](docs/SCALABILITY.md) — scaling path
+- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — environment variables and dev/test/prod separation
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Docker, production architecture, hosting recommendations
+- [`docs/BACKUP.md`](docs/BACKUP.md) — backup and recovery strategy
 - [`docs/adr/`](docs/adr/) — architecture decision records
 
 ## Core workflow

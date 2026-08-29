@@ -1,12 +1,15 @@
 const AppError = require('../utils/AppError');
 const projectRepository = require('../repositories/project.repository');
+const mediaAssetRepository = require('../repositories/mediaAsset.repository');
 const workspaceService = require('./workspace.service');
+const quotaService = require('./quota.service');
 
 async function createProject(userId, { title, description }) {
   const workspace = await workspaceService.getPersonalWorkspace(userId);
   if (!workspace) {
     throw AppError.internal('No workspace found for user');
   }
+  await quotaService.assertCanCreateProject(userId);
   return projectRepository.create({ workspaceId: workspace.id, title, description, createdBy: userId });
 }
 
@@ -28,7 +31,9 @@ async function getProject(userId, projectId) {
   // 404, not 403, on a resource that exists but isn't owned by the caller
   // — avoids confirming existence to someone without access.
   if (!project) throw AppError.notFound('Project not found');
-  return project;
+
+  const mediaAssets = await mediaAssetRepository.listWithLatestJobByProjectId(projectId);
+  return { ...project, mediaAssets };
 }
 
 async function updateProject(userId, projectId, fields) {

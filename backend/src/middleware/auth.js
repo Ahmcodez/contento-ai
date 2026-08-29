@@ -24,6 +24,13 @@ async function requireAuth(req, res, next) {
     }
 
     req.user = { id: user.id, email: user.email, plan: user.plan };
+    // Binds userId onto this request's child logger (pino-http gives
+    // every request its own req.log) so every subsequent log line for
+    // this request — including ones from deep inside a service — carries
+    // it automatically, without threading userId through every call.
+    if (req.log) {
+      req.log = req.log.child({ userId: user.id });
+    }
     return next();
   } catch (err) {
     return next(err);

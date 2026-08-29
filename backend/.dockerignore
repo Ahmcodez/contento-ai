@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.env
+.env.*
+!.env.example
+storage/uploads
+storage/tmp
+storage/test-uploads
+storage/test-tmp
+*.log
+.git
+coverage

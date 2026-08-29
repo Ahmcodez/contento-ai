@@ -7,6 +7,8 @@ const { randomUUID } = require('crypto');
 
 const logger = require('./logger');
 const config = require('./config');
+const metrics = require('./metrics');
+const asyncHandler = require('./utils/asyncHandler');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { generalLimiter } = require('./middleware/rateLimiter');
 const authRoutes = require('./routes/auth.routes');
@@ -21,6 +23,12 @@ function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  // Must be set before any middleware that reads req.ip — the rate
+  // limiter below keys directly off it (src/middleware/rateLimiter.js).
+  // See the TRUST_PROXY doc comment in src/config/index.js for what this
+  // controls and why getting it wrong in either direction is a real
+  // problem, not just a config nicety.
+  app.set('trust proxy', config.trustProxy);
   app.use(helmet());
   app.use(
     cors({
@@ -52,6 +60,32 @@ function createApp() {
   app.use(generalLimiter);
 
   app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+  app.get('/health/ready', asyncHandler(async (req, res) => {
+    const db = require('./db/client');
+    const redis = require('./redis/client');
+    const checks = {};
+
+    try {
+      await db.raw('SELECT 1');
+      checks.database = 'ok';
+    } catch {
+      checks.database = 'unreachable';
+    }
+
+    checks.redis = redis.status === 'ready' ? 'ok' : redis.status;
+
+    const healthy = checks.database === 'ok' && checks.redis === 'ok';
+    res.status(healthy ? 200 : 503).json({ status: healthy ? 'ok' : 'degraded', checks });
+  }));
+
+  // Not authenticated deliberately — this is operational visibility, not
+  // business data (docs/OPERATIONS.md). If this ever needs to be public-
+  // internet-facing, put it behind network restrictions or basic auth
+  // rather than app-level auth, since it's infra tooling, not a user API.
+  app.get('/metrics', (req, res) => {
+    res.status(200).json(metrics.snapshot());
+  });
 
   app.use('/api/v1/auth', authRoutes);
   app.use('/api/v1/projects', projectRoutes);
