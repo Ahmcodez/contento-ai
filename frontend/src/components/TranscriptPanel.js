@@ -7,8 +7,9 @@ import ErrorState from '@/components/ui/ErrorState';
 import { getTranscript } from '@/lib/api/jobs';
 import { formatTimecode } from '@/lib/format';
 import { ApiError } from '@/lib/api/client';
+import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
 
-export default function TranscriptPanel({ jobId }) {
+export default function TranscriptPanel({ jobId, jobIsActive }) {
   const [transcript, setTranscript] = useState(null);
   const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState(null);
@@ -32,6 +33,10 @@ export default function TranscriptPanel({ jobId }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
+
+  // Transcription usually finishes early in the pipeline, but if this
+  // panel was opened before it did, this picks it up once the job's done.
+  useRefetchOnJobComplete(jobIsActive, load);
 
   if (error) return <ErrorState message={error.message} onRetry={load} />;
 
