@@ -97,7 +97,7 @@ export default function UploadDropzone({ projectId, onUploaded }) {
       <div className="rounded-lg border border-line-dark p-6">
         <p className="text-sm text-paper">{file.name}</p>
         <p className="mt-0.5 text-[12px] text-slate-dim">{formatBytes(file.size)}</p>
-        {uploadError && <p className="mt-3 text-[13px] text-tally">{uploadError}</p>}
+        {uploadError && <p role="alert" className="mt-3 text-[13px] text-tally">{uploadError}</p>}
         <div className="mt-4 flex gap-2">
           <Button onClick={startUpload}>{uploadError ? 'Retry upload' : 'Upload video'}</Button>
           <Button variant="ghost" onClick={reset}>
@@ -143,7 +143,7 @@ export default function UploadDropzone({ projectId, onUploaded }) {
           onChange={(e) => pickFile(e.target.files?.[0])}
         />
       </div>
-      {validationError && <p className="mt-3 text-[13px] text-tally">{validationError}</p>}
+      {validationError && <p role="alert" className="mt-3 text-[13px] text-tally">{validationError}</p>}
     </div>
   );
 }

@@ -55,7 +55,7 @@ export default function LoginPage() {
           required
           autoComplete="current-password"
         />
-        {error && <p className="text-[13px] text-tally">{error}</p>}
+        {error && <p role="alert" className="text-[13px] text-tally">{error}</p>}
         <Button type="submit" loading={submitting} className="mt-2 w-full">
           Log in
         </Button>
