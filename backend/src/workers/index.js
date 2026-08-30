@@ -112,4 +112,8 @@ function wrapWithErrorPersistence(queueName, handler) {
   };
 }
 
-module.exports = { startWorkers };
+// wrapWithErrorPersistence is exported alongside startWorkers so its
+// retry-exhaustion / terminal-failure behavior can be tested directly
+// against fake BullMQ job objects, rather than only indirectly through a
+// full real Worker+Queue+backoff-timing integration test.
+module.exports = { startWorkers, wrapWithErrorPersistence };
