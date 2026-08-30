@@ -39,7 +39,18 @@ const STAGE_PROCESSORS = [
 
 function startWorkers() {
   const workers = STAGE_PROCESSORS.map(({ queue, handler, concurrency }) => {
-    const worker = new Worker(queue, wrapWithErrorPersistence(queue, handler), { connection, concurrency });
+    // Each Worker gets its own duplicated connection for the same reason
+    // each Queue does (see the comment in src/queue/queues.js) — a
+    // Worker holds a blocking command (BRPOPLPUSH) open on its
+    // connection for as long as it's waiting for a job, so sharing one
+    // socket across 8 of them is exactly the kind of contention that
+    // produces spontaneous ECONNRESET under real load.
+    const workerConnection = connection.duplicate();
+    const worker = new Worker(queue, wrapWithErrorPersistence(queue, handler), {
+      connection: workerConnection,
+      concurrency,
+    });
+    worker.duplicatedConnection = workerConnection;
 
     worker.on('completed', (job) => {
       logger.info({ queue, jobId: job.id }, 'job completed');
@@ -54,6 +65,21 @@ function startWorkers() {
 
   logger.info(`Worker started, handling ${workers.length} queues`);
   return workers;
+}
+
+/**
+ * Closes every worker returned by startWorkers, plus the duplicated
+ * connection each one owns. worker.close() alone does not close an
+ * externally-provided connection — see the closeAllQueues doc comment in
+ * src/queue/queues.js for the same reasoning.
+ */
+async function stopWorkers(workers) {
+  await Promise.all(
+    workers.map(async (worker) => {
+      await worker.close();
+      if (worker.duplicatedConnection) await worker.duplicatedConnection.quit().catch(() => {});
+    }),
+  );
 }
 
 /**
@@ -116,4 +142,4 @@ function wrapWithErrorPersistence(queueName, handler) {
 // retry-exhaustion / terminal-failure behavior can be tested directly
 // against fake BullMQ job objects, rather than only indirectly through a
 // full real Worker+Queue+backoff-timing integration test.
-module.exports = { startWorkers, wrapWithErrorPersistence };
+module.exports = { startWorkers, stopWorkers, wrapWithErrorPersistence };

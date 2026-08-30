@@ -1,9 +1,9 @@
 const { enqueueVideoValidate } = require('../src/queue/producers');
-const { QUEUE_NAMES, getQueue } = require('../src/queue/queues');
+const { QUEUE_NAMES, getQueue, closeAllQueues } = require('../src/queue/queues');
 
 describe('queue producers', () => {
   afterAll(async () => {
-    await getQueue(QUEUE_NAMES.VIDEO_VALIDATE).close();
+    await closeAllQueues();
   });
 
   it('enqueues a video.validate job with the expected payload', async () => {

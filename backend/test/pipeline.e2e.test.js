@@ -92,8 +92,8 @@ describe('full content pipeline (e2e)', () => {
   });
 
   afterAll(async () => {
-    const { QUEUE_NAMES, getQueue } = require('../src/queue/queues');
-    await Promise.all(Object.values(QUEUE_NAMES).map((name) => getQueue(name).close()));
+    const { closeAllQueues } = require('../src/queue/queues');
+    await closeAllQueues();
     delete global.__mockAIProvider;
     delete global.__mockTranscriptionProvider;
     // db.destroy() and redis.quit() are handled once by test/setup.js's

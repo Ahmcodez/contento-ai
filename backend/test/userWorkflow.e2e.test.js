@@ -28,8 +28,8 @@ jest.mock('../src/transcription', () => ({
 }));
 
 const createApp = require('../src/app');
-const { startWorkers } = require('../src/workers/index');
-const { QUEUE_NAMES, getQueue } = require('../src/queue/queues');
+const { startWorkers, stopWorkers } = require('../src/workers/index');
+const { closeAllQueues } = require('../src/queue/queues');
 
 const app = createApp();
 const FIXTURE = path.join(__dirname, 'fixtures', 'sample.mp4');
@@ -95,8 +95,8 @@ describe('complete user workflow (real HTTP + real queue + real workers)', () =>
   }, 20000);
 
   afterAll(async () => {
-    await Promise.all((workers || []).map((w) => w.close()));
-    await Promise.all(Object.values(QUEUE_NAMES).map((name) => getQueue(name).close()));
+    await stopWorkers(workers || []);
+    await closeAllQueues();
   }, 20000);
 
   it('walks the full journey: register -> login -> project -> upload -> processing -> transcript -> clips -> content -> download', async () => {
