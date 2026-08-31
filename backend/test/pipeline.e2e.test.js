@@ -1,8 +1,6 @@
 const path = require('path');
 const fs = require('fs/promises');
-const crypto = require('crypto');
 const db = require('../src/db/client');
-const redis = require('../src/redis/client');
 const config = require('../src/config');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'sample.mp4');

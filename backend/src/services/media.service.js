@@ -1,7 +1,6 @@
 const fs = require('fs');
 const fsp = require('fs/promises');
 const crypto = require('crypto');
-const path = require('path');
 const { ulid } = require('ulid');
 
 const db = require('../db/client');
@@ -99,12 +98,10 @@ async function uploadMedia(userId, projectId, file) {
     await enqueueVideoValidate({ processingJobId: processingJob.id, mediaAssetId: mediaAsset.id });
 
     return { mediaAsset, processingJob };
-  } catch (err) {
+  } finally {
     // On any failure after the file landed in storage/DB we still want the
     // temp upload cleaned up; a partially-created storage object without a
     // DB row is a documented acceptable orphan in V1 (no cleanup job yet).
-    throw err;
-  } finally {
     await cleanup();
   }
 }
