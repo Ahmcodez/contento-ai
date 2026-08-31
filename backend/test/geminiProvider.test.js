@@ -1,5 +1,46 @@
 const GeminiProvider = require('../src/ai/GeminiProvider');
 const { AIProviderError } = require('../src/ai/AIProvider');
+const config = require('../src/config');
+
+describe('GeminiProvider model selection', () => {
+  let originalFetch;
+  let capturedUrl;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    global.fetch = jest.fn((url) => {
+      capturedUrl = url;
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          candidates: [{ content: { parts: [{ text: '{}' }] } }],
+          usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
+        }),
+      });
+    });
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('defaults to the configured GEMINI_MODEL, not a hardcoded string, so a model deprecation is a config change', async () => {
+    const provider = new GeminiProvider('fake-key');
+    await provider.generateText({ prompt: 'hello' });
+    expect(capturedUrl).toContain(`/models/${config.ai.geminiModel}:generateContent`);
+  });
+
+  it('never hardcodes a specific retired model id (regression guard: gemini-1.5-flash is fully shut down as of this app\'s last verified check)', async () => {
+    const provider = new GeminiProvider('fake-key');
+    expect(provider.model).not.toBe('gemini-1.5-flash');
+  });
+
+  it('still allows an explicit model override for callers that need one', async () => {
+    const provider = new GeminiProvider('fake-key', { model: 'gemini-3.5-flash-lite' });
+    await provider.generateText({ prompt: 'hello' });
+    expect(capturedUrl).toContain('/models/gemini-3.5-flash-lite:generateContent');
+  });
+});
 
 describe('GeminiProvider structured output parsing', () => {
   let provider;
