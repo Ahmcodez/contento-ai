@@ -9,13 +9,17 @@ import { cancelJob } from '@/lib/api/jobs';
 
 export default function JobStatusPanel({ job, onCancelled }) {
   const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState(null);
   const isActive = !['completed', 'failed', 'cancelled'].includes(job.stateGroup);
 
   async function handleCancel() {
     setCancelling(true);
+    setCancelError(null);
     try {
       await cancelJob(job.id);
       onCancelled?.();
+    } catch (err) {
+      setCancelError(err.message || 'Could not cancel this job. Please try again.');
     } finally {
       setCancelling(false);
     }
@@ -30,7 +34,10 @@ export default function JobStatusPanel({ job, onCancelled }) {
             {isActive && <span className="font-mono text-[12px] tabular text-slate-dim">{job.progressPercent}%</span>}
           </div>
           {job.errorMessage && (
-            <p className="mt-2 max-w-md text-[13px] leading-relaxed text-tally">{job.errorMessage}</p>
+            <p role="alert" className="mt-2 max-w-md text-[13px] leading-relaxed text-tally">{job.errorMessage}</p>
+          )}
+          {cancelError && (
+            <p role="alert" className="mt-2 max-w-md text-[13px] leading-relaxed text-tally">{cancelError}</p>
           )}
         </div>
         {isActive && (

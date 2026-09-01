@@ -30,7 +30,7 @@ export default function PricingTeaser() {
 
         <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2">
           {TIERS.map((tier) => (
-            <Card key={tier.name} className="p-6">
+            <Card key={tier.name} interactive className="p-6">
               <div className="flex items-baseline justify-between">
                 <h3 className="font-display text-xl text-paper">{tier.name}</h3>
                 <span className="font-mono text-sm text-slate">{tier.price}</span>

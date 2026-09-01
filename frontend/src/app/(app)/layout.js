@@ -18,7 +18,12 @@ function Gate({ children }) {
   if (status === 'loading') {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-5 w-5 animate-spin rounded-full border-[1.5px] border-slate border-t-transparent" />
+        <div
+          role="status"
+          className="h-5 w-5 animate-spin rounded-full border-[1.5px] border-slate border-t-transparent"
+        >
+          <span className="sr-only">Loading…</span>
+        </div>
       </div>
     );
   }

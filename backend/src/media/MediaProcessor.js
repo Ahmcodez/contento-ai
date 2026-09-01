@@ -1,7 +1,12 @@
 const { execFile } = require('child_process');
 const config = require('../config');
 
-const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes per invocation, bounds a hung/malicious input
+// Configurable rather than hardcoded: a legitimate large/long video on
+// real (as opposed to dev-laptop) production hardware could plausibly
+// exceed a fixed 5-minute ceiling for some operations (e.g. extracting
+// audio from a full-length upload on a CPU-constrained container), and
+// there was previously no way to raise this without a code change.
+const FFMPEG_TIMEOUT_MS = config.ffmpeg.timeoutMs;
 
 function run(binPath, args, { timeout = FFMPEG_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {

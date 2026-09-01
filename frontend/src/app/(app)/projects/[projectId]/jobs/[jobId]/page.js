@@ -46,7 +46,7 @@ export default function JobDetailPage() {
         <div className="mt-6">
           {activeTab === 'clips' && <ClipsPanel jobId={jobId} jobIsActive={isActive} />}
           {activeTab === 'content' && <ContentPanel jobId={jobId} jobIsActive={isActive} />}
-          {activeTab === 'transcript' && <TranscriptPanel jobId={jobId} />}
+          {activeTab === 'transcript' && <TranscriptPanel jobId={jobId} jobIsActive={isActive} />}
         </div>
       </div>
     </div>

@@ -36,6 +36,15 @@ export function useJobStatus(jobId, { intervalMs = 3000 } = {}) {
     let cancelled = false;
 
     async function tick() {
+      // Skip this cycle's fetch entirely while the tab is backgrounded —
+      // there's no one watching the progress bar, so there's no reason
+      // to keep polling the API at full rate. The visibilitychange
+      // listener below catches back up immediately once it's visible
+      // again, so nothing is missed, it's just not fetched needlessly.
+      if (document.hidden) {
+        timerRef.current = setTimeout(tick, intervalMs);
+        return;
+      }
       try {
         const data = await fetchOnce();
         if (!cancelled && data && !TERMINAL_STATES.has(data.state)) {
@@ -50,10 +59,22 @@ export function useJobStatus(jobId, { intervalMs = 3000 } = {}) {
       }
     }
 
+    function handleVisibilityChange() {
+      // Coming back to the tab: refresh right away instead of waiting out
+      // whatever's left of the current interval, so the status shown
+      // isn't stale from whenever the tab was last focused.
+      if (!document.hidden && !cancelled) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        tick();
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     tick();
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [jobId, intervalMs, fetchOnce]);

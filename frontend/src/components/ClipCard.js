@@ -39,7 +39,7 @@ export default function ClipCard({ clip }) {
   }
 
   return (
-    <Card className="flex flex-col p-4">
+    <Card interactive className="flex flex-col p-4">
       {/* 9:16 placeholder frame — clip preview streaming/playback is a
           real capability the backend supports via download, but there's
           no inline-preview streaming endpoint yet, so this shows clip

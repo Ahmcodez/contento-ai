@@ -56,7 +56,7 @@ export default function NewProjectPage() {
             rows={3}
             placeholder="What's this video about?"
           />
-          {error && <p className="text-[13px] text-tally">{error}</p>}
+          {error && <p role="alert" className="text-[13px] text-tally">{error}</p>}
           <Button type="submit" loading={submitting} className="mt-2 self-start">
             Continue to upload
           </Button>

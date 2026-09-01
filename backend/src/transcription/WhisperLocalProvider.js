@@ -23,9 +23,8 @@ class WhisperLocalProvider extends TranscriptionProvider {
   async transcribe(audioFilePath) {
     const outDir = path.dirname(audioFilePath);
 
-    let stdout;
     try {
-      ({ stdout } = await new Promise((resolve, reject) => {
+      await new Promise((resolve, reject) => {
         execFile(
           this.binaryName,
           [audioFilePath, '--output_format', this.outputFormat, '--output_dir', outDir],
@@ -45,7 +44,7 @@ class WhisperLocalProvider extends TranscriptionProvider {
             return resolve({ stdout: out, stderr: errOut });
           },
         );
-      }));
+      });
     } catch (err) {
       if (err instanceof TranscriptionProviderError) throw err;
       throw new TranscriptionProviderError(`Unexpected transcription error: ${err.message}`, { retryable: true });

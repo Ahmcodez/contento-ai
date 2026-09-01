@@ -26,6 +26,51 @@ async function assertWithinJobBudget(processingJobId) {
 }
 
 /**
+ * Per-user daily ceiling (MAX_AI_REQUESTS_PER_USER_PER_DAY). This value
+ * was previously defined in config and shown to users on the usage page
+ * (usageView.service.js) but never actually enforced anywhere — nothing
+ * stopped a user from exceeding it by starting job after job throughout
+ * a day, each burning up to maxAiCallsPerJob calls with no daily ceiling
+ * checked at all. Mirrors assertWithinJobBudget's pattern: checked
+ * before every call, not just at job start, for the same reason (a job
+ * can span a day boundary or be one of several a user starts that day).
+ */
+async function assertWithinUserDailyBudget(userId) {
+  if (!userId) return;
+  const used = await usageService.countAiRequestsToday(userId);
+  if (used >= config.limits.maxAiRequestsPerUserPerDay) {
+    throw new AIProviderError(
+      `You've reached your daily limit of ${config.limits.maxAiRequestsPerUserPerDay} AI requests. This resets tomorrow.`,
+      { retryable: false, reason: 'user_daily_ai_budget_exceeded' },
+    );
+  }
+}
+
+/**
+ * Optional account-wide ceiling across every user combined
+ * (MAX_TOTAL_AI_REQUESTS_PER_DAY, default 0 = disabled). A cheap,
+ * emergency-brake circuit breaker distinct from the per-user check above
+ * — see the doc comment on the env var in src/config/index.js for when
+ * this is (and isn't) appropriate to enable.
+ */
+async function assertWithinGlobalDailyBudget() {
+  if (!config.limits.maxTotalAiRequestsPerDay) return; // 0/unset = disabled
+  const used = await usageService.countAiRequestsGlobalToday();
+  if (used >= config.limits.maxTotalAiRequestsPerDay) {
+    throw new AIProviderError(
+      'This environment has reached its configured daily AI request ceiling. Try again tomorrow, or ask an operator to raise MAX_TOTAL_AI_REQUESTS_PER_DAY.',
+      { retryable: false, reason: 'global_daily_ai_budget_exceeded' },
+    );
+  }
+}
+
+async function assertWithinBudgets({ userId, processingJobId }) {
+  await assertWithinJobBudget(processingJobId);
+  await assertWithinUserDailyBudget(userId);
+  await assertWithinGlobalDailyBudget();
+}
+
+/**
  * Wraps a structured-output AI call with: retry + exponential backoff for
  * transient failures, zod schema validation of the parsed result (a
  * response that parses as JSON but doesn't match the expected shape is
@@ -52,7 +97,7 @@ async function callStructured({
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await assertWithinJobBudget(processingJobId);
+      await assertWithinBudgets({ userId, processingJobId });
 
       const { data, usage } = await provider.generateStructuredOutput({
         prompt,
@@ -106,7 +151,7 @@ async function callText({ provider, prompt, systemPrompt, maxTokens, userId, pro
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      await assertWithinJobBudget(processingJobId);
+      await assertWithinBudgets({ userId, processingJobId });
 
       const result = await provider.generateText({ prompt, systemPrompt, maxTokens });
       if (userId) {

@@ -8,9 +8,9 @@
 | Redis | Docker container (local) or free tier (Upstash) | $0 |
 | Object storage | Local disk (`LocalDiskStorageDriver`) | $0 |
 | FFmpeg | Local binary | $0 |
-| Transcription | Self-hosted Whisper (`whisper.cpp`/faster-whisper) as default dev provider | $0 |
+| Transcription | Self-hosted Whisper (`whisper.cpp`/faster-whisper) available as a provider, off by default (`TRANSCRIPTION_PROVIDER=none`) — a fresh clone with zero config makes zero transcription calls of any kind, not even a free local one | $0 |
 | Queue infra | BullMQ on the local/free Redis | $0 |
-| Monitoring | Bull Board (self-hosted) + local structured logs | $0 |
+| Monitoring | `GET /api/v1/admin/queues` (real BullMQ job counts per queue, gated by `ADMIN_API_KEY`) + local structured logs | $0 |
 | CI | GitHub Actions (free tier for private repos at this scale) | $0 |
 
 ## 2. What has real, per-call cost — and is therefore gated
@@ -55,24 +55,30 @@ hardcoded constant buried in code.
   `GEMINI_API_KEY` is unset, the app refuses to start rather than silently
   failing (and definitely never falls back to "just try the call and see")
   on every request.
-- **Hard ceiling env vars, not just per-user quotas**: e.g.
-  `MAX_AI_REQUESTS_PER_USER_PER_DAY` caps a single user, but a
-  global `MAX_TOTAL_AI_REQUESTS_PER_DAY` (documented as a config option,
-  optional, off by default) is available as an account-wide circuit
-  breaker for a dev/staging environment shared by a small team — cheap
-  insurance against a runaway retry loop bug burning through a budget
-  overnight.
-- **Local-first default provider for transcription** (self-hosted
-  Whisper) means the *most expensive-if-metered* pipeline stage costs
-  nothing at all during development by default — hosted STT is opt-in via
-  config, not the default.
+- **Hard ceiling env vars, not just per-user quotas**: `MAX_AI_REQUESTS_PER_USER_PER_DAY`
+  caps a single user (actually enforced in `reliableCall.js`, checked before
+  every AI call — see `docs/RELEASE_READINESS.md` for why this is worth
+  calling out explicitly). `MAX_TOTAL_AI_REQUESTS_PER_DAY` is a global,
+  account-wide ceiling across every user combined — 0 (unset) disables it,
+  intended for a small shared dev/staging environment or as an emergency
+  brake rather than a normal production setting. Cheap insurance against a
+  runaway retry loop bug burning through a budget overnight.
+- **Local-first default provider for transcription**: `TRANSCRIPTION_PROVIDER`
+  defaults to `none` (not self-hosted Whisper) — a fresh clone with zero
+  configuration makes no transcription calls at all, paid or free-but-slow.
+  Self-hosted Whisper is available and genuinely free per-call, but is an
+  explicit opt-in via config, not a silent default.
 - **Idempotency everywhere a paid call happens** (`docs/PIPELINE.md` §5,
   `docs/QUEUE.md` §6) means retries — the most common source of
   "accidentally called the API 5 times for one job" — reuse prior results
   instead of re-spending.
-- **Bull Board visibility**: because queue state is inspectable in dev, a
-  runaway job (e.g. an infinite retry loop from a misconfigured backoff)
-  is visible immediately rather than discovered via a bill at month's end.
+- **Queue visibility**: `GET /api/v1/admin/queues` (gated by `ADMIN_API_KEY`)
+  surfaces real per-queue job counts (waiting/active/failed/delayed), so a
+  runaway job (e.g. an infinite retry loop from a misconfigured backoff) is
+  visible without shelling into Redis or the database directly, rather
+  than discovered via a bill at month's end. A fuller dashboard UI (e.g.
+  Bull Board) remains a reasonable future addition — not built yet, see
+  `docs/RELEASE_READINESS.md`.
 
 ## 5. Cost-aware defaults, summarized
 

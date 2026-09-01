@@ -6,6 +6,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import ClipCard from '@/components/ClipCard';
 import { getClips } from '@/lib/api/jobs';
+import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
 
 export default function ClipsPanel({ jobId, jobIsActive }) {
   const [clips, setClips] = useState(null);
@@ -25,6 +26,9 @@ export default function ClipsPanel({ jobId, jobIsActive }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
+
+  // Picks up clips that finished rendering after this panel first loaded.
+  useRefetchOnJobComplete(jobIsActive, load);
 
   if (error) return <ErrorState message={error.message} onRetry={load} />;
 

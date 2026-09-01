@@ -8,9 +8,11 @@ jest.mock('../src/services/usage.service', () => ({
   recordAiRequest: jest.fn().mockResolvedValue(undefined),
   countAiRequestsToday: jest.fn(),
   countAiRequestsForJob: jest.fn().mockResolvedValue(0),
+  countAiRequestsGlobalToday: jest.fn(),
 }));
 
 const usageService = require('../src/services/usage.service');
+const config = require('../src/config');
 
 const simpleSchema = z.object({ value: z.number() });
 
@@ -110,6 +112,39 @@ describe('callStructured', () => {
       callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, processingJobId: 'job-x', maxAttempts: 3 }),
     ).rejects.toThrow('reached its limit');
     expect(provider.generateStructuredOutput).not.toHaveBeenCalled();
+  });
+
+  it('refuses to make a call once the user has hit their per-day ai request budget (previously configured but never actually enforced)', async () => {
+    usageService.countAiRequestsToday.mockResolvedValueOnce(config.limits.maxAiRequestsPerUserPerDay);
+    const provider = makeProvider([{ data: { value: 1 }, usage: {} }]);
+    await expect(
+      callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, userId: 'user-x', maxAttempts: 3 }),
+    ).rejects.toThrow('daily limit');
+    expect(provider.generateStructuredOutput).not.toHaveBeenCalled();
+  });
+
+  it('does not check the global daily budget at all when MAX_TOTAL_AI_REQUESTS_PER_DAY is 0 (the default = disabled)', async () => {
+    expect(config.limits.maxTotalAiRequestsPerDay).toBe(0);
+    usageService.countAiRequestsToday.mockResolvedValueOnce(0);
+    const provider = makeProvider([{ data: { value: 1 }, usage: {} }]);
+    await callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, userId: 'user-x', maxAttempts: 3 });
+    expect(usageService.countAiRequestsGlobalToday).not.toHaveBeenCalled();
+  });
+
+  it('refuses to make a call once the account-wide daily ceiling is hit, when one is configured', async () => {
+    const original = config.limits.maxTotalAiRequestsPerDay;
+    config.limits.maxTotalAiRequestsPerDay = 100;
+    try {
+      usageService.countAiRequestsToday.mockResolvedValueOnce(0);
+      usageService.countAiRequestsGlobalToday.mockResolvedValueOnce(100);
+      const provider = makeProvider([{ data: { value: 1 }, usage: {} }]);
+      await expect(
+        callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, userId: 'user-x', maxAttempts: 3 }),
+      ).rejects.toThrow('daily AI request ceiling');
+      expect(provider.generateStructuredOutput).not.toHaveBeenCalled();
+    } finally {
+      config.limits.maxTotalAiRequestsPerDay = original;
+    }
   });
 });
 

@@ -32,4 +32,23 @@ async function countAiRequestsForJob(processingJobId) {
   return Number(result.total) || 0;
 }
 
-module.exports = { recordAiRequest, countAiRequestsToday, countAiRequestsForJob };
+/**
+ * Every user's AI usage summed for the current day, regardless of which
+ * user made the call — the query backing the optional account-wide
+ * circuit breaker (MAX_TOTAL_AI_REQUESTS_PER_DAY). Distinct from
+ * countAiRequestsToday, which is scoped to one user.
+ */
+async function countAiRequestsGlobalToday() {
+  const result = await db('usage_records')
+    .where({ category: 'ai_requests', occurred_on: new Date().toISOString().slice(0, 10) })
+    .sum('amount as total')
+    .first();
+  return Number(result.total) || 0;
+}
+
+module.exports = {
+  recordAiRequest,
+  countAiRequestsToday,
+  countAiRequestsForJob,
+  countAiRequestsGlobalToday,
+};

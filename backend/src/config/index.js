@@ -34,8 +34,27 @@ const envSchema = z.object({
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(30),
 
+  // Gates the internal /api/v1/admin/* routes (queue/job observability —
+  // see src/routes/admin.routes.js). Optional, unset by default: with no
+  // key configured the routes are disabled outright (404), not silently
+  // open. This app has no admin/role concept anywhere else yet (workspace
+  // membership roles are a separate, workspace-scoped thing), so a full
+  // RBAC system is out of scope here — a shared secret is the correctly
+  // small solution for a single internal-ops endpoint, not a substitute
+  // for real per-admin accounts if/when this app grows a proper admin
+  // tier.
+  ADMIN_API_KEY: z.string().optional(),
+
   AI_PROVIDER: z.enum(['gemini', 'none']).default('none'),
   GEMINI_API_KEY: z.string().optional(),
+  // Google retires/renames Gemini model IDs on a roughly 3-6 month
+  // cadence (gemini-1.5-flash, once this app's hardcoded default, is
+  // fully shut down as of this writing — every real call would 404).
+  // Making the model an env var, not a hardcoded string, means a
+  // deprecation is a config change, not a code change/redeploy. Check
+  // https://ai.google.dev/gemini-api/docs/changelog before updating this
+  // default, since "current" here has a short shelf life by design.
+  GEMINI_MODEL: z.string().default('gemini-3.6-flash'),
 
   TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'none']).default('none'),
 
@@ -56,6 +75,15 @@ const envSchema = z.object({
   MAX_VIDEO_DURATION_SECONDS: z.coerce.number().int().positive().default(3600),
   MAX_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(10),
   MAX_AI_REQUESTS_PER_USER_PER_DAY: z.coerce.number().int().positive().default(50),
+  // Account-wide circuit breaker across *every* user combined — separate
+  // from the per-user ceiling above. 0 (the default) disables it, since
+  // a hard global ceiling isn't appropriate for every deployment (a
+  // legitimately busy multi-tenant production instance could trip it
+  // during ordinary traffic). Meant for a small shared dev/staging
+  // environment, or as an emergency brake, where cheap insurance against
+  // a runaway retry-loop bug burning through a budget overnight matters
+  // more than the risk of false-positive throttling.
+  MAX_TOTAL_AI_REQUESTS_PER_DAY: z.coerce.number().int().nonnegative().default(0),
   MAX_PROCESSING_JOBS_PER_USER_CONCURRENT: z.coerce.number().int().positive().default(2),
   MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
   MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH: z.coerce.number().int().positive().default(300),
@@ -83,6 +111,12 @@ const envSchema = z.object({
 
   FFMPEG_PATH: z.string().default('ffmpeg'),
   FFPROBE_PATH: z.string().default('ffprobe'),
+  // Per-invocation ceiling for a single ffmpeg/ffprobe call. Was
+  // previously a hardcoded 5-minute constant with no way to raise it
+  // without a code change — a real risk for a legitimately large/slow
+  // input on constrained production hardware, not just malicious/hung
+  // input (which is what the timeout is actually meant to guard against).
+  FFMPEG_TIMEOUT_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
@@ -140,6 +174,7 @@ function loadConfig() {
     trustProxy: parseTrustProxy(env.TRUST_PROXY),
 
     databaseUrl: env.DATABASE_URL,
+    adminApiKey: env.ADMIN_API_KEY,
     redisUrl: env.REDIS_URL,
 
     auth: {
@@ -152,6 +187,7 @@ function loadConfig() {
     ai: {
       provider: env.AI_PROVIDER,
       geminiApiKey: env.GEMINI_API_KEY,
+      geminiModel: env.GEMINI_MODEL,
     },
 
     transcription: {
@@ -177,6 +213,7 @@ function loadConfig() {
       maxVideoDurationSeconds: env.MAX_VIDEO_DURATION_SECONDS,
       maxClipsPerVideo: env.MAX_CLIPS_PER_VIDEO,
       maxAiRequestsPerUserPerDay: env.MAX_AI_REQUESTS_PER_USER_PER_DAY,
+      maxTotalAiRequestsPerDay: env.MAX_TOTAL_AI_REQUESTS_PER_DAY,
       maxProcessingJobsPerUserConcurrent: env.MAX_PROCESSING_JOBS_PER_USER_CONCURRENT,
       maxProjectsPerUser: env.MAX_PROJECTS_PER_USER,
       maxProcessingMinutesPerUserPerMonth: env.MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH,
@@ -207,6 +244,7 @@ function loadConfig() {
       ffmpegPath: env.FFMPEG_PATH,
       ffprobePath: env.FFPROBE_PATH,
       outputMaxSizeMb: env.FFMPEG_OUTPUT_MAX_SIZE_MB,
+      timeoutMs: env.FFMPEG_TIMEOUT_MS,
     },
 
     queue: {

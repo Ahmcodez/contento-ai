@@ -24,7 +24,7 @@ function stripMarkdownFences(text) {
  * when AI_PROVIDER=gemini and a key is present.
  */
 class GeminiProvider extends AIProvider {
-  constructor(apiKey, { model = 'gemini-1.5-flash' } = {}) {
+  constructor(apiKey, { model = config.ai.geminiModel } = {}) {
     super();
     this.apiKey = apiKey;
     this.model = model;

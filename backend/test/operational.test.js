@@ -20,6 +20,36 @@ describe('operational endpoints', () => {
       expect(res.body.checks.database).toBe('ok');
       expect(res.body.checks.redis).toBe('ok');
     });
+
+    it('reports 503/degraded when redis is not ready, without touching the database check', async () => {
+      // eslint-disable-next-line global-require
+      const redis = require('../src/redis/client');
+      const originalStatus = redis.status;
+      // ioredis's own status values while disconnected/reconnecting
+      // include 'connecting', 'reconnecting', 'close', 'end' — 'end' here
+      // stands in for "redis is down", without actually tearing down the
+      // shared connection other test files in this run also depend on.
+      redis.status = 'end';
+
+      try {
+        const res = await request(app).get('/health/ready');
+        expect(res.status).toBe(503);
+        expect(res.body.status).toBe('degraded');
+        expect(res.body.checks.redis).toBe('end');
+        expect(res.body.checks.database).toBe('ok'); // one dependency being down doesn't hide the other's real status
+      } finally {
+        redis.status = originalStatus;
+      }
+    });
+
+    // A symmetric "database unreachable" case (db.raw() rejecting) is not
+    // covered here: knex defines `raw` as a non-writable property, and
+    // both plain reassignment and jest.spyOn fail against it (the latter
+    // throws from inside jest-mock's own internals rather than jest
+    // reporting a normal test failure). The route's try/catch around
+    // db.raw() is a direct mirror of the redis check just proven above,
+    // so this is a known, low-risk gap rather than an untested code path
+    // with any real behavioral uncertainty.
   });
 
   describe('GET /metrics', () => {

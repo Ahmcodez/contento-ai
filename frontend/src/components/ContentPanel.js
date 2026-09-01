@@ -7,6 +7,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import ContentEditor from '@/components/ContentEditor';
 import { getContent } from '@/lib/api/jobs';
+import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
 
 const CONTENT_TABS = [
   { id: 'blog', label: 'Blog' },
@@ -35,6 +36,9 @@ export default function ContentPanel({ jobId, jobIsActive }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
+
+  // Picks up content that finished generating after this panel first loaded.
+  useRefetchOnJobComplete(jobIsActive, load);
 
   function handleContentChange(updated) {
     setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
@@ -78,7 +82,12 @@ export default function ContentPanel({ jobId, jobIsActive }) {
       />
       <div className="mt-5">
         {activeContent ? (
-          <ContentEditor jobId={jobId} content={activeContent} onChange={handleContentChange} />
+          // key={activeContent.id} forces a fresh ContentEditor per content
+          // item. Without it, switching tabs kept the same instance mounted
+          // and its internal `body` state (seeded once via useState) never
+          // re-synced to the newly active tab's content — so a user could
+          // switch from Blog to LinkedIn and still see the Blog text.
+          <ContentEditor key={activeContent.id} jobId={jobId} content={activeContent} onChange={handleContentChange} />
         ) : (
           <p className="py-8 text-center text-sm text-slate">This content type hasn&apos;t been generated.</p>
         )}

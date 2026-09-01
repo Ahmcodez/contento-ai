@@ -58,7 +58,7 @@ export default function SignupPage() {
           autoComplete="new-password"
         />
         <p className="text-[12px] text-slate-dim">At least 10 characters, with a letter and a number.</p>
-        {error && <p className="text-[13px] text-tally">{error}</p>}
+        {error && <p role="alert" className="text-[13px] text-tally">{error}</p>}
         <Button type="submit" loading={submitting} className="mt-2 w-full">
           Create account
         </Button>
