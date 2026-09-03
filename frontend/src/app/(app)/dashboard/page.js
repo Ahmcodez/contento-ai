@@ -32,8 +32,8 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl text-paper">Projects</h1>
-          <p className="mt-1 text-sm text-slate">Your uploads and what&apos;s been made from them.</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tightest text-paper">Projects</h1>
+          <p className="mt-1.5 text-sm text-slate">Your uploads and what&apos;s been made from them.</p>
         </div>
         <Link href="/projects/new">
           <Button>New project</Button>
