@@ -4,7 +4,12 @@ import TimelineRuler from '@/components/ui/TimelineRuler';
 
 export default function Hero() {
   return (
-    <section className="mx-auto max-w-6xl px-6 pb-20 pt-20 sm:pt-28">
+    // TEMP: hero-bg-temp.png is a placeholder background — swap/crop/position
+    // properly before ship. Tracked as a follow-up, not final art.
+    <section
+      className="relative mx-auto max-w-6xl overflow-hidden bg-cover bg-right bg-no-repeat px-6 pb-20 pt-20 sm:pt-28"
+      style={{ backgroundImage: "url('/hero-bg-temp.png')" }}
+    >
       <div className="flex items-center gap-2.5">
         <span className="relative flex h-2 w-2" aria-hidden="true">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-tally opacity-60" />
