@@ -47,6 +47,20 @@ function errorHandler(err, req, res, next) {
   }
 
   res.status(statusCode).json(body);
+
+  // If this request's body was never fully read — the common case being
+  // requireAuth rejecting a large multipart upload before multer ever
+  // gets a chance to run — the client can be left mid-write into a
+  // socket nobody server-side is draining. TCP backpressure then stalls
+  // its writes indefinitely: from the browser's side, a video upload
+  // just freezes at whatever % had been flushed, with no error ever
+  // surfaced (see docs/ for the incident this was found from). Once the
+  // response has finished sending, destroy the request so any pending
+  // client writes get released with a clear connection error instead of
+  // hanging forever.
+  if (!req.readableEnded) {
+    res.on('finish', () => req.destroy());
+  }
 }
 
 module.exports = { notFoundHandler, errorHandler };
