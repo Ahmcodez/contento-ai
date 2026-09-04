@@ -5,8 +5,14 @@ import TimelineRuler from '@/components/ui/TimelineRuler';
 export default function Hero() {
   return (
     <section className="mx-auto max-w-6xl px-6 pb-20 pt-20 sm:pt-28">
-      <p className="text-[13px] font-medium uppercase tracking-[0.1em] text-tally">Content repurposing</p>
-      <h1 className="mt-4 max-w-3xl font-display text-5xl leading-[1.05] tracking-tightest text-paper sm:text-6xl">
+      <div className="flex items-center gap-2.5">
+        <span className="relative flex h-2 w-2" aria-hidden="true">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-tally opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-tally shadow-glow-sm" />
+        </span>
+        <p className="text-[13px] font-medium uppercase tracking-[0.1em] text-tally">Content repurposing</p>
+      </div>
+      <h1 className="mt-5 max-w-3xl font-display text-6xl font-semibold leading-[1.02] tracking-tightest text-paper sm:text-7xl">
         Turn one long video into <em className="not-italic text-tally">everything</em> your audience needs.
       </h1>
       <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-slate">

@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 
 const VARIANTS = {
-  primary: 'bg-tally text-paper hover:bg-tally-hover active:bg-tally-hover',
+  primary: 'bg-tally text-paper shadow-glow-sm hover:bg-tally-hover hover:shadow-glow active:bg-tally-hover',
   secondary: 'bg-transparent text-paper border border-line-dark hover:border-slate hover:bg-white/5',
   ghost: 'bg-transparent text-slate hover:text-paper',
   danger: 'bg-transparent text-tally border border-tally/40 hover:bg-tally/10',
@@ -22,8 +22,8 @@ const Button = forwardRef(function Button(
       ref={ref}
       disabled={disabled || loading}
       className={`inline-flex items-center justify-center gap-2 font-medium tracking-[-0.01em]
-        transition-colors duration-150 ease-out rounded-[3px]
-        disabled:opacity-40 disabled:cursor-not-allowed
+        transition-all duration-150 ease-out rounded-[3px]
+        disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
         ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
       {...props}
     >
