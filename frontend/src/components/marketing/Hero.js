@@ -1,53 +1,61 @@
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
-import TimelineRuler from '@/components/ui/TimelineRuler';
+
+const LOGO_PLACEHOLDERS = ['Logo one', 'Logo two', 'Logo three', 'Logo four', 'Logo five'];
 
 export default function Hero() {
   return (
-    // TEMP: hero-bg-temp.png is a placeholder background — swap/crop/position
-    // properly before ship. Tracked as a follow-up, not final art.
-    <section className="relative overflow-hidden">
-      <div
-        className="absolute inset-0 bg-cover bg-right bg-no-repeat"
-        style={{ backgroundImage: "url('/hero-bg-temp.png')" }}
-        aria-hidden="true"
-      />
-      {/* Protective scrim so copy stays legible regardless of what sits
-          underneath it in the art — solid where the text lives, clear
-          over the illustration on the right. */}
-      <div className="absolute inset-0 bg-gradient-to-r from-paper via-paper/95 to-paper/10" aria-hidden="true" />
-
-      <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-20 sm:pt-28">
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex h-2 w-2" aria-hidden="true">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-tally opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-tally shadow-glow-sm" />
-          </span>
-          <p className="text-[13px] font-medium uppercase tracking-[0.1em] text-tally">Content repurposing</p>
-        </div>
-        <h1 className="mt-5 max-w-3xl font-geo text-6xl font-semibold leading-[1.02] tracking-tightest text-ink sm:text-7xl">
-          Turn one long video into <em className="not-italic text-tally">everything</em> your audience needs.
+    <section className="relative bg-ice-hero px-6 pb-24 pt-20 sm:pt-28">
+      <div className="mx-auto max-w-4xl text-center">
+        <h1 className="font-jakarta text-5xl font-extrabold leading-[1.08] tracking-tight text-graphite sm:text-6xl">
+          Turn one video into <span className="text-gradient-brand">everything</span> your audience needs
         </h1>
-        <p className="mt-6 max-w-xl text-[17px] leading-relaxed text-ink/70">
-          Upload a podcast, talk, or long-form video. Contento transcribes it, finds the moments worth
-          clipping, ranks them, renders vertical clips with captions, and writes the blog post, social
-          copy, and description — grounded in what was actually said.
+        <p className="mx-auto mt-5 max-w-2xl text-lg leading-relaxed text-steel sm:text-xl">
+          Upload a podcast, talk, or long-form video. Get ranked short clips with captions, plus a blog
+          post and social copy — grounded in what was actually said, not guessed.
         </p>
-        <div className="mt-8 flex items-center gap-4">
-          <Link href="/signup">
-            <Button size="lg">Start free</Button>
-          </Link>
-          <a href="#how-it-works" className="text-sm text-ink/60 hover:text-ink">
-            See how it works →
-          </a>
+
+        {/* Integrated upload/start bar */}
+        <div className="mx-auto mt-9 flex max-w-2xl flex-col gap-2 rounded-[28px] border border-mist bg-white p-2 shadow-sm sm:flex-row sm:items-center sm:rounded-full">
+          <input
+            type="text"
+            placeholder="Paste a video link or drop a file to get started"
+            className="w-full flex-1 rounded-full bg-transparent px-5 py-3 text-sm text-graphite placeholder:text-steel/70 focus:outline-none"
+          />
+          <div className="flex gap-2 px-1 pb-1 sm:px-0 sm:pb-0">
+            <Link href="/signup" className="flex-1 sm:flex-none">
+              <Button variant="gradientPill" size="lg" className="w-full sm:w-auto">
+                Try for free
+              </Button>
+            </Link>
+            <Link href="/signup" className="hidden sm:block">
+              <Button variant="outlinePill" size="lg">
+                Upload files
+              </Button>
+            </Link>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-steel">No credit card required · Free plan available</p>
+
+        {/* Hero preview media frame — swap for a real product screen recording */}
+        <div className="relative mx-auto mt-14 aspect-video w-full max-w-4xl overflow-hidden rounded-2xl border border-mist bg-white shadow-xl shadow-slate-900/5">
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ice-50 to-ice-100 text-sm text-steel">
+            [ Product demo preview — swap in a real screen recording ]
+          </div>
         </div>
 
-        <div className="mt-20">
-          <TimelineRuler marks={24} tone="light" />
-          <div className="mt-2 flex justify-between font-mono text-[11px] tabular text-ink/50">
-            <span>00:00:00</span>
-            <span>00:24:00</span>
-            <span>00:48:00</span>
+        {/* Social proof — placeholders only until there are real logos to show */}
+        <div className="mt-14">
+          <p className="text-xs uppercase tracking-wide text-steel">Built for creators who publish everywhere</p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+            {LOGO_PLACEHOLDERS.map((label) => (
+              <div
+                key={label}
+                className="flex h-8 w-24 items-center justify-center rounded border border-dashed border-mist text-[11px] text-steel/80"
+              >
+                {label}
+              </div>
+            ))}
           </div>
         </div>
       </div>

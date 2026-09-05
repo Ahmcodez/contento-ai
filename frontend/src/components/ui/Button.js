@@ -1,10 +1,14 @@
 import { forwardRef } from 'react';
 
 const VARIANTS = {
-  primary: 'bg-tally text-paper shadow-glow-sm hover:bg-tally-hover hover:shadow-glow active:bg-tally-hover',
-  secondary: 'bg-transparent text-paper border border-line-dark hover:border-slate hover:bg-white/5',
-  ghost: 'bg-transparent text-slate hover:text-paper',
-  danger: 'bg-transparent text-tally border border-tally/40 hover:bg-tally/10',
+  primary: 'rounded-[3px] bg-tally text-paper shadow-glow-sm hover:bg-tally-hover hover:shadow-glow active:bg-tally-hover',
+  secondary: 'rounded-[3px] bg-transparent text-paper border border-line-dark hover:border-slate hover:bg-white/5',
+  ghost: 'rounded-[3px] bg-transparent text-slate hover:text-paper',
+  danger: 'rounded-[3px] bg-transparent text-tally border border-tally/40 hover:bg-tally/10',
+  // --- Redesign-phase pill variants ---
+  gradientPill:
+    'rounded-full bg-brand-gradient text-white shadow-pill-glow hover:brightness-110 active:brightness-95',
+  outlinePill: 'rounded-full bg-white text-graphite border border-[#111827] hover:bg-[#111827]/[0.03]',
 };
 
 const SIZES = {
@@ -22,7 +26,7 @@ const Button = forwardRef(function Button(
       ref={ref}
       disabled={disabled || loading}
       className={`inline-flex items-center justify-center gap-2 font-medium tracking-[-0.01em]
-        transition-all duration-150 ease-out rounded-[3px]
+        transition-all duration-150 ease-out
         disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
         ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
       {...props}

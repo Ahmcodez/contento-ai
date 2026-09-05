@@ -74,6 +74,7 @@ module.exports = {
       },
       backgroundImage: {
         'brand-gradient': 'linear-gradient(90deg, #A855F7 0%, #EC4899 50%, #38BDF8 100%)',
+        'ice-hero': 'linear-gradient(180deg, #F8FAFC 0%, #EDF5FF 55%, #FFFFFF 100%)',
       },
     },
   },

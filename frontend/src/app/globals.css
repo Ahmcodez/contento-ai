@@ -47,4 +47,9 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Redesign-phase: gradient-fill text for headline accent phrases. */
+  .text-gradient-brand {
+    @apply bg-brand-gradient bg-clip-text text-transparent;
+  }
 }
