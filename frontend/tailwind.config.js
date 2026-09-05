@@ -34,6 +34,11 @@ module.exports = {
         display: ['Fraunces', 'Georgia', 'serif'],
         sans: ['"Public Sans"', 'system-ui', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        // Geometric sans, used only where copy sits directly over a photo/
+        // illustration (currently just the hero) — the serif display face
+        // reads too soft against imagery and wants a sturdier, more
+        // structural letterform there instead.
+        geo: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
       },
       letterSpacing: {
         tightest: '-0.04em',

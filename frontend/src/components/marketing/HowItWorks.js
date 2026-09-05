@@ -16,31 +16,40 @@ const STAGES = [
     label: 'Upload',
     description: 'Drop in your long-form video — a podcast episode, talk, interview, or stream.',
     Icon: UploadIcon,
+    // TODO: set to a real photo path once provided (e.g. someone uploading
+    // a file) — the card already renders it with a legibility overlay,
+    // see the backgroundImage handling below.
+    image: null,
   },
   {
     label: 'Transcribe',
     description: 'Full timestamped transcript, down to the segment.',
     Icon: WaveformIcon,
+    image: null,
   },
   {
     label: 'Analyze',
     description: 'Topics, stories, strong opinions, and quotable moments — identified, not guessed.',
     Icon: FindQuoteIcon,
+    image: null,
   },
   {
     label: 'Find clips',
     description: 'Candidate moments scored on hook strength, clarity, and whether they stand alone.',
     Icon: ClipBladeIcon,
+    image: null,
   },
   {
     label: 'Render',
     description: 'Vertical 9:16 clips with burned-in captions and a thumbnail, ready to post.',
     Icon: VerticalFrameIcon,
+    image: null,
   },
   {
     label: 'Write',
     description: 'Blog post, LinkedIn, X, Instagram caption, and YouTube description — grounded in the transcript.',
     Icon: PenNibIcon,
+    image: null,
   },
 ];
 
@@ -50,18 +59,35 @@ function StageCard({ stage, index }) {
 
   return (
     <motion.div
-      initial={prefersReducedMotion ? false : { opacity: 0, x: fromLeft ? -56 : 56 }}
+      initial={prefersReducedMotion ? false : { opacity: 0, x: fromLeft ? -36 : 36 }}
       whileInView={{ opacity: 1, x: 0 }}
-      viewport={{ once: true, margin: '-80px' }}
-      transition={{ duration: 0.6, delay: index * 0.08, ease: [0.16, 1, 0.3, 1] }}
+      // once: false + this margin means the card replays its entrance
+      // every time it crosses into view — scrolling back up re-triggers it
+      // just like scrolling down does — rather than only ever once.
+      viewport={{ once: false, amount: 0.4, margin: '-40px' }}
+      transition={{ duration: 0.9, delay: index * 0.05, ease: [0.22, 1, 0.36, 1] }}
     >
-      <Card interactive className="group h-full p-6">
-        <div className="flex items-start justify-between">
+      <Card
+        interactive
+        className="group relative flex h-full min-h-[280px] flex-col overflow-hidden p-6"
+        style={
+          stage.image
+            ? { backgroundImage: `url('${stage.image}')`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : undefined
+        }
+      >
+        {stage.image && (
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-surface-dark via-surface-dark/75 to-surface-dark/20"
+            aria-hidden="true"
+          />
+        )}
+        <div className="relative flex items-start justify-between">
           <stage.Icon className="h-8 w-8 text-paper transition-colors duration-200 group-hover:text-tally" />
           <span className="font-mono text-[12px] tabular text-slate-dim">{String(index + 1).padStart(2, '0')}</span>
         </div>
-        <h3 className="mt-5 font-display text-lg text-paper">{stage.label}</h3>
-        <p className="mt-1.5 text-[13px] leading-relaxed text-slate">{stage.description}</p>
+        <h3 className="relative mt-5 font-display text-lg text-paper">{stage.label}</h3>
+        <p className="relative mt-1.5 text-[13px] leading-relaxed text-slate">{stage.description}</p>
       </Card>
     </motion.div>
   );
