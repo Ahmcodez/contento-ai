@@ -19,7 +19,7 @@ export default function Hero() {
         <div className="mx-auto mt-9 flex max-w-2xl flex-col gap-2 rounded-[28px] border border-mist bg-white p-2 shadow-sm sm:flex-row sm:items-center sm:rounded-full">
           <input
             type="text"
-            placeholder="Paste a video link or drop a file to get started"
+            placeholder="Drop a video file to get started"
             className="w-full flex-1 rounded-full bg-transparent px-5 py-3 text-sm text-graphite placeholder:text-steel/70 focus:outline-none"
           />
           <div className="flex gap-2 px-1 pb-1 sm:px-0 sm:pb-0">
