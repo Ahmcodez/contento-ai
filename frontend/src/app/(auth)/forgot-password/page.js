@@ -10,15 +10,15 @@ import Link from 'next/link';
 export default function ForgotPasswordPage() {
   return (
     <div>
-      <Link href="/" className="font-display text-xl text-paper">
+      <Link href="/" className="font-jakarta text-xl font-bold text-graphite">
         Contento
       </Link>
-      <h1 className="mt-8 text-2xl font-medium text-paper">Reset your password</h1>
-      <p className="mt-4 text-sm leading-relaxed text-slate">
+      <h1 className="mt-8 text-2xl font-semibold text-graphite">Reset your password</h1>
+      <p className="mt-4 text-sm leading-relaxed text-steel">
         Self-service password reset isn&apos;t available yet. If you&apos;re locked out of your
         account, please contact support and we&apos;ll help you get back in.
       </p>
-      <Link href="/login" className="mt-6 inline-block text-[13px] text-paper hover:text-tally">
+      <Link href="/login" className="mt-6 inline-block text-[13px] text-graphite hover:text-accent-magenta">
         ← Back to log in
       </Link>
     </div>

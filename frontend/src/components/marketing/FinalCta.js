@@ -3,14 +3,16 @@ import Button from '@/components/ui/Button';
 
 export default function FinalCta() {
   return (
-    <section className="border-t border-line-dark">
-      <div className="mx-auto max-w-6xl px-6 py-24 text-center">
-        <h2 className="font-display text-4xl leading-tight text-paper">
-          Your next upload could already be a dozen posts.
+    <section className="bg-ice-hero px-6 py-24 text-center">
+      <div className="mx-auto max-w-3xl">
+        <h2 className="font-jakarta text-4xl font-extrabold leading-tight tracking-tight text-graphite">
+          Your next upload could already be <span className="text-gradient-brand">a dozen posts</span>.
         </h2>
         <div className="mt-8">
           <Link href="/signup">
-            <Button size="lg">Start free</Button>
+            <Button variant="gradientPill" size="lg">
+              Try for free
+            </Button>
           </Link>
         </div>
       </div>

@@ -33,15 +33,16 @@ export default function SignupPage() {
 
   return (
     <div>
-      <Link href="/" className="font-display text-xl text-paper">
+      <Link href="/" className="font-jakarta text-xl font-bold text-graphite">
         Contento
       </Link>
-      <h1 className="mt-8 text-2xl font-medium text-paper">Create your account</h1>
-      <p className="mt-1 text-sm text-slate">Start turning long videos into clips and posts.</p>
+      <h1 className="mt-8 text-2xl font-semibold text-graphite">Create your account</h1>
+      <p className="mt-1 text-sm text-steel">Start turning long videos into clips and posts.</p>
 
       <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
-        <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+        <Input surface="light" label="Name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
         <Input
+          surface="light"
           label="Email"
           type="email"
           value={email}
@@ -50,6 +51,7 @@ export default function SignupPage() {
           autoComplete="email"
         />
         <Input
+          surface="light"
           label="Password"
           type="password"
           value={password}
@@ -57,16 +59,16 @@ export default function SignupPage() {
           required
           autoComplete="new-password"
         />
-        <p className="text-[12px] text-slate-dim">At least 10 characters, with a letter and a number.</p>
+        <p className="text-[12px] text-steel">At least 10 characters, with a letter and a number.</p>
         {error && <p role="alert" className="text-[13px] text-tally">{error}</p>}
-        <Button type="submit" loading={submitting} className="mt-2 w-full">
+        <Button variant="gradientPill" type="submit" loading={submitting} className="mt-2 w-full">
           Create account
         </Button>
       </form>
 
-      <div className="mt-6 text-[13px] text-slate">
+      <div className="mt-6 text-[13px] text-steel">
         Already have an account?{' '}
-        <Link href="/login" className="text-paper hover:text-tally">
+        <Link href="/login" className="text-graphite hover:text-accent-magenta">
           Log in
         </Link>
       </div>

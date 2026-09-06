@@ -32,14 +32,15 @@ export default function LoginPage() {
 
   return (
     <div>
-      <Link href="/" className="font-display text-xl text-paper">
+      <Link href="/" className="font-jakarta text-xl font-bold text-graphite">
         Contento
       </Link>
-      <h1 className="mt-8 text-2xl font-medium text-paper">Log in</h1>
-      <p className="mt-1 text-sm text-slate">Welcome back.</p>
+      <h1 className="mt-8 text-2xl font-semibold text-graphite">Log in</h1>
+      <p className="mt-1 text-sm text-steel">Welcome back.</p>
 
       <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
         <Input
+          surface="light"
           label="Email"
           type="email"
           value={email}
@@ -48,6 +49,7 @@ export default function LoginPage() {
           autoComplete="email"
         />
         <Input
+          surface="light"
           label="Password"
           type="password"
           value={password}
@@ -56,16 +58,16 @@ export default function LoginPage() {
           autoComplete="current-password"
         />
         {error && <p role="alert" className="text-[13px] text-tally">{error}</p>}
-        <Button type="submit" loading={submitting} className="mt-2 w-full">
+        <Button variant="gradientPill" type="submit" loading={submitting} className="mt-2 w-full">
           Log in
         </Button>
       </form>
 
-      <div className="mt-6 flex justify-between text-[13px] text-slate">
-        <Link href="/forgot-password" className="hover:text-paper">
+      <div className="mt-6 flex justify-between text-[13px] text-steel">
+        <Link href="/forgot-password" className="hover:text-graphite">
           Forgot password?
         </Link>
-        <Link href="/signup" className="hover:text-paper">
+        <Link href="/signup" className="hover:text-graphite">
           Create an account
         </Link>
       </div>

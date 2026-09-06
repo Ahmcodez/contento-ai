@@ -8,42 +8,42 @@ const EXAMPLE_CLIPS = [
 
 export default function ExampleOutput() {
   return (
-    <section className="border-t border-line-dark">
-      <div className="mx-auto max-w-6xl px-6 py-20">
+    <section className="bg-white px-6 py-20">
+      <div className="mx-auto max-w-6xl">
         <div className="flex items-baseline justify-between">
-          <h2 className="font-display text-3xl text-paper">From one upload</h2>
-          <span className="text-[12px] uppercase tracking-[0.06em] text-slate-dim">Example output</span>
+          <h2 className="font-jakarta text-3xl font-bold text-graphite">From one upload</h2>
+          <span className="text-[12px] uppercase tracking-[0.06em] text-steel">Example output</span>
         </div>
-        <p className="mt-2 max-w-lg text-slate">
+        <p className="mt-2 max-w-lg text-steel">
           A single 45-minute upload becomes a set of ranked clips and a full round of written content.
         </p>
 
         <div className="mt-10 grid grid-cols-1 gap-8 lg:grid-cols-2">
           <div>
-            <h3 className="mb-4 text-[13px] font-medium uppercase tracking-[0.06em] text-slate-dim">Ranked clips</h3>
+            <h3 className="mb-4 text-[13px] font-medium uppercase tracking-[0.06em] text-steel">Ranked clips</h3>
             <div className="flex flex-col gap-3">
               {EXAMPLE_CLIPS.map((clip) => (
                 <div
                   key={clip.title}
-                  className="flex items-center justify-between rounded-lg border border-line-dark p-4"
+                  className="flex items-center justify-between rounded-lg border border-mist p-4"
                 >
                   <div>
-                    <p className="text-sm text-paper">{clip.title}</p>
-                    <p className="mt-1 font-mono text-[11px] tabular text-slate-dim">{clip.range}</p>
+                    <p className="text-sm text-graphite">{clip.title}</p>
+                    <p className="mt-1 font-mono text-[11px] tabular text-steel">{clip.range}</p>
                   </div>
-                  <Badge tone={clip.score >= 85 ? 'success' : 'warning'}>{clip.score}</Badge>
+                  <Badge surface="light" tone={clip.score >= 85 ? 'success' : 'warning'}>{clip.score}</Badge>
                 </div>
               ))}
             </div>
           </div>
 
           <div>
-            <h3 className="mb-4 text-[13px] font-medium uppercase tracking-[0.06em] text-slate-dim">
+            <h3 className="mb-4 text-[13px] font-medium uppercase tracking-[0.06em] text-steel">
               Grounded written content
             </h3>
-            <div className="rounded-lg border border-line-dark p-5">
-              <span className="text-[11px] uppercase tracking-[0.06em] text-tally">LinkedIn</span>
-              <p className="mt-3 text-[14px] leading-relaxed text-paper/90">
+            <div className="rounded-lg border border-mist p-5">
+              <span className="text-[11px] uppercase tracking-[0.06em] text-accent-magenta">LinkedIn</span>
+              <p className="mt-3 text-[14px] leading-relaxed text-graphite/90">
                 Most people think talent is the deciding factor in whether a startup survives its first
                 year. It isn&apos;t — persistence is. Here&apos;s the story of a failure that taught me
                 that the hard way, and why I&apos;d make the same bet again…
