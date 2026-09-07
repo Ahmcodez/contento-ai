@@ -4,11 +4,11 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   * {
-    @apply border-line-dark;
+    @apply border-mist;
   }
 
   html {
@@ -16,13 +16,13 @@
   }
 
   body {
-    @apply bg-ink text-paper antialiased;
+    @apply bg-white text-graphite antialiased;
     font-feature-settings: 'ss01' 1;
   }
 
   ::selection {
     background-color: theme('colors.tally.DEFAULT');
-    color: theme('colors.paper');
+    color: theme('colors.white');
   }
 
   /* Visible keyboard focus everywhere, no exceptions */

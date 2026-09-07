@@ -33,8 +33,8 @@ export default function MediaAssetRow({ projectId, asset }) {
   const content = (
     <Card interactive={isLinked} className="flex items-center justify-between gap-4 p-4">
       <div className="min-w-0">
-        <p className="truncate text-sm text-paper">{asset.originalFilename}</p>
-        <div className="mt-1 flex items-center gap-3 text-[12px] text-slate-dim">
+        <p className="truncate text-sm text-graphite">{asset.originalFilename}</p>
+        <div className="mt-1 flex items-center gap-3 text-[12px] text-steel">
           <span>{formatRelativeTime(asset.createdAt)}</span>
           {asset.durationSeconds && <span>{formatDuration(asset.durationSeconds)}</span>}
         </div>

@@ -95,7 +95,7 @@ export default function ContentEditor({ jobId, content, onChange }) {
           </div>
         </>
       ) : (
-        <div className="whitespace-pre-wrap rounded-[3px] border border-line-dark p-4 text-[14px] leading-relaxed text-paper/90">
+        <div className="whitespace-pre-wrap rounded-[3px] border border-mist p-4 text-[14px] leading-relaxed text-graphite/90">
           {body}
         </div>
       )}

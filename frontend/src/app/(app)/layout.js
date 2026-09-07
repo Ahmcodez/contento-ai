@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/lib/auth/AuthContext';
-import AppNav from '@/components/layout/AppNav';
+import AppSidebar from '@/components/layout/AppSidebar';
 
 function Gate({ children }) {
   const { status } = useAuth();
@@ -20,7 +20,7 @@ function Gate({ children }) {
       <div className="flex min-h-screen items-center justify-center">
         <div
           role="status"
-          className="h-5 w-5 animate-spin rounded-full border-[1.5px] border-slate border-t-transparent"
+          className="h-5 w-5 animate-spin rounded-full border-[1.5px] border-steel border-t-transparent"
         >
           <span className="sr-only">Loading…</span>
         </div>
@@ -33,9 +33,11 @@ function Gate({ children }) {
   }
 
   return (
-    <div className="min-h-screen">
-      <AppNav />
-      <main className="mx-auto max-w-7xl px-6 py-8">{children}</main>
+    <div className="flex min-h-screen bg-white">
+      <AppSidebar />
+      <main className="min-w-0 flex-1 overflow-y-auto px-8 py-8">
+        <div className="mx-auto max-w-6xl">{children}</div>
+      </main>
     </div>
   );
 }

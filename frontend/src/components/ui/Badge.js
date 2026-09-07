@@ -17,8 +17,8 @@ const TONES_LIGHT = {
   danger: 'bg-red-50 text-red-700 border-red-200',
 };
 
-export default function Badge({ tone = 'neutral', dot = false, surface = 'dark', className = '', children }) {
-  const tones = surface === 'light' ? TONES_LIGHT : TONES;
+export default function Badge({ tone = 'neutral', dot = false, surface = 'light', className = '', children }) {
+  const tones = surface === 'dark' ? TONES : TONES_LIGHT;
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-[3px] border px-2 py-0.5 text-[11px] font-medium

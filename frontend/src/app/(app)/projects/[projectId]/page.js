@@ -51,8 +51,8 @@ export default function ProjectOverviewPage() {
     <div>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl text-paper">{project.title}</h1>
-          {project.description && <p className="mt-1 max-w-xl text-sm text-slate">{project.description}</p>}
+          <h1 className="font-jakarta text-2xl text-graphite">{project.title}</h1>
+          {project.description && <p className="mt-1 max-w-xl text-sm text-steel">{project.description}</p>}
         </div>
         {!showUpload && <Button onClick={() => setShowUpload(true)}>Upload another video</Button>}
       </div>
@@ -64,7 +64,7 @@ export default function ProjectOverviewPage() {
       )}
 
       <div className="mt-8">
-        <h2 className="text-sm font-medium text-slate">Uploads</h2>
+        <h2 className="text-sm font-medium text-steel">Uploads</h2>
         <div className="mt-3 flex flex-col gap-3">
           {project.mediaAssets.length === 0 ? (
             <EmptyState

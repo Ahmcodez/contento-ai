@@ -1,9 +1,9 @@
 import { forwardRef } from 'react';
 
 const VARIANTS = {
-  primary: 'rounded-[3px] bg-tally text-paper shadow-glow-sm hover:bg-tally-hover hover:shadow-glow active:bg-tally-hover',
-  secondary: 'rounded-[3px] bg-transparent text-paper border border-line-dark hover:border-slate hover:bg-white/5',
-  ghost: 'rounded-[3px] bg-transparent text-slate hover:text-paper',
+  primary: 'rounded-[3px] bg-tally text-white shadow-glow-sm hover:bg-tally-hover hover:shadow-glow active:bg-tally-hover',
+  secondary: 'rounded-[3px] bg-transparent text-graphite border border-mist hover:border-steel/60 hover:bg-mist/40',
+  ghost: 'rounded-[3px] bg-transparent text-steel hover:text-graphite',
   danger: 'rounded-[3px] bg-transparent text-tally border border-tally/40 hover:bg-tally/10',
   // --- Redesign-phase pill variants ---
   gradientPill:

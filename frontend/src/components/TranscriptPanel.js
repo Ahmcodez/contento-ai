@@ -62,11 +62,11 @@ export default function TranscriptPanel({ jobId, jobIsActive }) {
   return (
     <div className="flex flex-col gap-1">
       {transcript.segments.map((segment, i) => (
-        <div key={i} className="flex gap-4 rounded-[3px] px-2 py-1.5 hover:bg-white/[0.03]">
-          <span className="w-14 shrink-0 pt-0.5 font-mono text-[11px] tabular text-slate-dim">
+        <div key={i} className="flex gap-4 rounded-[3px] px-2 py-1.5 hover:bg-mist/50">
+          <span className="w-14 shrink-0 pt-0.5 font-mono text-[11px] tabular text-steel">
             {formatTimecode(segment.startMs)}
           </span>
-          <p className="text-[14px] leading-relaxed text-paper/90">{segment.text}</p>
+          <p className="text-[14px] leading-relaxed text-graphite/90">{segment.text}</p>
         </div>
       ))}
     </div>

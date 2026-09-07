@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
 
-export const Input = forwardRef(function Input({ label, error, surface = 'dark', className = '', id, ...props }, ref) {
-  const light = surface === 'light';
+export const Input = forwardRef(function Input({ label, error, surface = 'light', className = '', id, ...props }, ref) {
+  const light = surface !== 'dark';
   return (
     <label className="block">
       {label && (
@@ -21,8 +21,8 @@ export const Input = forwardRef(function Input({ label, error, surface = 'dark',
   );
 });
 
-export const Textarea = forwardRef(function Textarea({ label, error, surface = 'dark', className = '', ...props }, ref) {
-  const light = surface === 'light';
+export const Textarea = forwardRef(function Textarea({ label, error, surface = 'light', className = '', ...props }, ref) {
+  const light = surface !== 'dark';
   return (
     <label className="block">
       {label && (

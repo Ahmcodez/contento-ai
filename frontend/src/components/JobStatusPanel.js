@@ -31,7 +31,7 @@ export default function JobStatusPanel({ job, onCancelled }) {
         <div>
           <div className="flex items-center gap-2">
             <StatusBadge stateGroup={job.stateGroup} />
-            {isActive && <span className="font-mono text-[12px] tabular text-slate-dim">{job.progressPercent}%</span>}
+            {isActive && <span className="font-mono text-[12px] tabular text-steel">{job.progressPercent}%</span>}
           </div>
           {job.errorMessage && (
             <p role="alert" className="mt-2 max-w-md text-[13px] leading-relaxed text-tally">{job.errorMessage}</p>
@@ -56,7 +56,7 @@ export default function JobStatusPanel({ job, onCancelled }) {
       </div>
 
       {job.stateGroup === 'failed' && (
-        <p className="mt-6 text-center text-[12px] text-slate-dim">
+        <p className="mt-6 text-center text-[12px] text-steel">
           Retrying a failed job isn&apos;t available yet — start a new upload to try again.
         </p>
       )}

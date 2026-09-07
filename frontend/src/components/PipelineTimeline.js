@@ -22,7 +22,7 @@ export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
   return (
     <div>
       <div className="relative flex items-start justify-between">
-        <div className="absolute left-0 right-0 top-[7px] h-px bg-line-dark" />
+        <div className="absolute left-0 right-0 top-[7px] h-px bg-line-light" />
         {STAGES.map((stage, i) => {
           const isDone = currentIndex > i || stateGroup === 'completed';
           const isActive = i === currentIndex && !isDone;
@@ -30,13 +30,13 @@ export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
             <div key={stage.group} className="relative z-10 flex flex-col items-center gap-2" style={{ flex: 1 }}>
               <div
                 className={`h-[15px] w-[15px] rounded-full border-2 transition-colors
-                  ${isDone ? 'border-tally bg-tally' : isActive ? 'border-tally bg-ink' : 'border-line-dark bg-ink'}`}
+                  ${isDone ? 'border-tally bg-tally' : isActive ? 'border-tally bg-white' : 'border-line-light bg-white'}`}
               >
                 {isActive && <span className="block h-full w-full animate-ping rounded-full bg-tally/60" />}
               </div>
               <span
                 className={`text-center text-[11px] font-medium leading-tight
-                  ${isDone || isActive ? 'text-paper' : 'text-slate-dim'}`}
+                  ${isDone || isActive ? 'text-graphite' : 'text-steel'}`}
               >
                 {stage.label}
               </span>
@@ -45,7 +45,7 @@ export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
         })}
       </div>
       {(failed || cancelled) && (
-        <p className="mt-4 text-center text-[13px] text-slate">
+        <p className="mt-4 text-center text-[13px] text-steel">
           {failed ? 'Processing stopped before finishing.' : 'Processing was cancelled.'}
         </p>
       )}

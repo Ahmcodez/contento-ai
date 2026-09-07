@@ -5,11 +5,11 @@
  * repurposed here to show pipeline stages laid out along a timeline
  * instead of generic numbered-circle steps.
  */
-export default function TimelineRuler({ marks = 10, className = '', tone = 'dark' }) {
-  const isLight = tone === 'light';
+export default function TimelineRuler({ marks = 10, className = '', tone = 'light' }) {
+  const isLight = tone !== 'dark';
   const railColor = isLight ? 'bg-line-light' : 'bg-line-dark';
-  const majorTick = isLight ? 'bg-ink/50' : 'bg-slate';
-  const minorTick = isLight ? 'bg-ink/20' : 'bg-line-dark';
+  const majorTick = isLight ? 'bg-graphite/50' : 'bg-slate';
+  const minorTick = isLight ? 'bg-graphite/20' : 'bg-line-dark';
 
   return (
     <div className={`relative h-6 w-full ${className}`} aria-hidden="true">

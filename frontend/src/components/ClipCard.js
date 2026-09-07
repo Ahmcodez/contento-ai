@@ -46,13 +46,13 @@ export default function ClipCard({ clip }) {
           metadata rather than fabricating a video player against a URL
           that doesn't exist. */}
       <div className="flex aspect-[9/16] items-center justify-center rounded-[3px] bg-black/40">
-        <span className="font-mono text-[12px] tabular text-slate-dim">
+        <span className="font-mono text-[12px] tabular text-steel">
           {formatTimecode(0)} – {formatTimecode(durationMs)}
         </span>
       </div>
 
       <div className="mt-3 flex items-start justify-between gap-2">
-        <h4 className="text-[14px] font-medium leading-snug text-paper">{clip.title}</h4>
+        <h4 className="text-[14px] font-medium leading-snug text-graphite">{clip.title}</h4>
         {clip.qualityScore !== null && (
           <Badge tone={scoreTone(clip.qualityScore)} className="shrink-0">
             {formatScore(clip.qualityScore)}
@@ -60,9 +60,9 @@ export default function ClipCard({ clip }) {
         )}
       </div>
 
-      {clip.hook && <p className="mt-1.5 text-[13px] italic leading-relaxed text-slate">&ldquo;{clip.hook}&rdquo;</p>}
+      {clip.hook && <p className="mt-1.5 text-[13px] italic leading-relaxed text-steel">&ldquo;{clip.hook}&rdquo;</p>}
 
-      <div className="mt-3 flex items-center justify-between text-[11px] text-slate-dim">
+      <div className="mt-3 flex items-center justify-between text-[11px] text-steel">
         <span className="font-mono tabular">
           {formatTimecode(clip.startMs)} → {formatTimecode(clip.endMs)}
         </span>

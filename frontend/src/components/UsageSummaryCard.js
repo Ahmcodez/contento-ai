@@ -10,14 +10,14 @@ function UsageRow({ label, used, max }) {
   return (
     <div>
       <div className="flex items-baseline justify-between text-[13px]">
-        <span className="text-slate">{label}</span>
-        <span className="font-mono tabular text-paper">
-          {used} <span className="text-slate-dim">/ {max}</span>
+        <span className="text-steel">{label}</span>
+        <span className="font-mono tabular text-graphite">
+          {used} <span className="text-steel">/ {max}</span>
         </span>
       </div>
-      <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-white/10">
+      <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-mist">
         <div
-          className={`h-full transition-[width] duration-300 ${pct > 90 ? 'bg-tally' : 'bg-paper'}`}
+          className={`h-full transition-[width] duration-300 ${pct > 90 ? 'bg-tally' : 'bg-graphite'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -40,9 +40,9 @@ export default function UsageSummaryCard() {
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-paper">Usage</h3>
+        <h3 className="text-sm font-medium text-graphite">Usage</h3>
         {usage && (
-          <span className="text-[11px] uppercase tracking-[0.06em] text-slate-dim">{usage.plan} plan</span>
+          <span className="text-[11px] uppercase tracking-[0.06em] text-steel">{usage.plan} plan</span>
         )}
       </div>
 

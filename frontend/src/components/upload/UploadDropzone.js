@@ -81,9 +81,9 @@ export default function UploadDropzone({ projectId, onUploaded }) {
 
   if (status === 'uploading') {
     return (
-      <div className="rounded-lg border border-line-dark p-6">
-        <p className="text-sm text-paper">{file.name}</p>
-        <p className="mt-0.5 text-[12px] text-slate-dim">{formatBytes(file.size)}</p>
+      <div className="rounded-lg border border-mist p-6">
+        <p className="text-sm text-graphite">{file.name}</p>
+        <p className="mt-0.5 text-[12px] text-steel">{formatBytes(file.size)}</p>
         <ProgressBar value={progress} showLabel label={`Uploading ${file.name}`} className="mt-4" />
         <Button variant="ghost" size="sm" onClick={cancelUpload} className="mt-4">
           Cancel upload
@@ -94,9 +94,9 @@ export default function UploadDropzone({ projectId, onUploaded }) {
 
   if (file && status === 'idle') {
     return (
-      <div className="rounded-lg border border-line-dark p-6">
-        <p className="text-sm text-paper">{file.name}</p>
-        <p className="mt-0.5 text-[12px] text-slate-dim">{formatBytes(file.size)}</p>
+      <div className="rounded-lg border border-mist p-6">
+        <p className="text-sm text-graphite">{file.name}</p>
+        <p className="mt-0.5 text-[12px] text-steel">{formatBytes(file.size)}</p>
         {uploadError && <p role="alert" className="mt-3 text-[13px] text-tally">{uploadError}</p>}
         <div className="mt-4 flex gap-2">
           <Button onClick={startUpload}>{uploadError ? 'Retry upload' : 'Upload video'}</Button>
@@ -129,10 +129,10 @@ export default function UploadDropzone({ projectId, onUploaded }) {
         aria-label="Choose a video file to upload, or drag and drop one here"
         className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed
           px-6 py-16 text-center transition-colors
-          ${isDragging ? 'border-tally bg-tally/5' : 'border-line-dark hover:border-slate'}`}
+          ${isDragging ? 'border-tally bg-tally/5' : 'border-mist hover:border-steel/60'}`}
       >
-        <p className="text-sm font-medium text-paper">Drag and drop your video, or click to browse</p>
-        <p className="text-[12px] text-slate-dim">MP4, MOV, MKV, or WebM · up to 500MB</p>
+        <p className="text-sm font-medium text-graphite">Drag and drop your video, or click to browse</p>
+        <p className="text-[12px] text-steel">MP4, MOV, MKV, or WebM · up to 500MB</p>
         <input
           ref={inputRef}
           type="file"

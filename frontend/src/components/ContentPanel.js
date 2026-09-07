@@ -89,7 +89,7 @@ export default function ContentPanel({ jobId, jobIsActive }) {
           // switch from Blog to LinkedIn and still see the Blog text.
           <ContentEditor key={activeContent.id} jobId={jobId} content={activeContent} onChange={handleContentChange} />
         ) : (
-          <p className="py-8 text-center text-sm text-slate">This content type hasn&apos;t been generated.</p>
+          <p className="py-8 text-center text-sm text-steel">This content type hasn&apos;t been generated.</p>
         )}
       </div>
     </div>

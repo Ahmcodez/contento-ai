@@ -38,7 +38,7 @@ export default function NewProjectPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="font-display text-2xl text-paper">New project</h1>
+      <h1 className="font-jakarta text-2xl text-graphite">New project</h1>
 
       {step === 'details' && (
         <form onSubmit={handleCreateProject} className="mt-8 flex flex-col gap-4">
@@ -65,8 +65,8 @@ export default function NewProjectPage() {
 
       {step === 'upload' && project && (
         <div className="mt-8">
-          <p className="mb-4 text-sm text-slate">
-            <span className="text-paper">{project.title}</span> — now upload the video to process.
+          <p className="mb-4 text-sm text-steel">
+            <span className="text-graphite">{project.title}</span> — now upload the video to process.
           </p>
           <UploadDropzone projectId={project.id} onUploaded={handleUploaded} />
         </div>

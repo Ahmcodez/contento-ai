@@ -10,15 +10,15 @@ function UsageMetric({ label, used, max, unit = '' }) {
   const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
   return (
     <Card className="p-5">
-      <p className="text-[12px] uppercase tracking-[0.06em] text-slate-dim">{label}</p>
-      <p className="mt-2 font-mono text-2xl tabular text-paper">
+      <p className="text-[12px] uppercase tracking-[0.06em] text-steel">{label}</p>
+      <p className="mt-2 font-mono text-2xl tabular text-graphite">
         {used}
         {unit}
-        <span className="text-base text-slate-dim"> / {max}{unit}</span>
+        <span className="text-base text-steel"> / {max}{unit}</span>
       </p>
-      <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-white/10">
+      <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-mist">
         <div
-          className={`h-full transition-[width] duration-300 ${pct > 90 ? 'bg-tally' : 'bg-paper'}`}
+          className={`h-full transition-[width] duration-300 ${pct > 90 ? 'bg-tally' : 'bg-graphite'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -58,8 +58,8 @@ export default function UsagePage() {
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <h1 className="font-display text-2xl text-paper">Usage</h1>
-        <span className="rounded-[3px] border border-line-dark px-2.5 py-1 text-[12px] uppercase tracking-[0.06em] text-slate">
+        <h1 className="font-jakarta text-2xl text-graphite">Usage</h1>
+        <span className="rounded-[3px] border border-mist px-2.5 py-1 text-[12px] uppercase tracking-[0.06em] text-steel">
           {usage.plan} plan
         </span>
       </div>
@@ -79,8 +79,8 @@ export default function UsagePage() {
       </div>
 
       <div className="mt-8">
-        <h2 className="text-sm font-medium text-slate">Plan limits</h2>
-        <Card className="mt-3 divide-y divide-line-dark">
+        <h2 className="text-sm font-medium text-steel">Plan limits</h2>
+        <Card className="mt-3 divide-y divide-mist">
           {[
             ['Max upload size', `${usage.quota.maxUploadSizeMb} MB`],
             ['Max video duration', `${Math.round(usage.quota.maxUploadDurationSeconds / 60)} min`],
@@ -89,8 +89,8 @@ export default function UsagePage() {
             ['Max concurrent processing jobs', usage.quota.maxConcurrentJobs],
           ].map(([label, value]) => (
             <div key={label} className="flex items-center justify-between px-5 py-3 text-sm">
-              <span className="text-slate">{label}</span>
-              <span className="font-mono tabular text-paper">{value}</span>
+              <span className="text-steel">{label}</span>
+              <span className="font-mono tabular text-graphite">{value}</span>
             </div>
           ))}
         </Card>
