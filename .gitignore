@@ -36,8 +36,12 @@ coverage/
 # Media / uploads / processing artifacts (never commit user content)
 /backend/storage/uploads/*
 /backend/storage/tmp/*
+/backend/storage/test-uploads/*
+/backend/storage/test-tmp/*
 !/backend/storage/uploads/.gitkeep
 !/backend/storage/tmp/.gitkeep
+!/backend/storage/test-uploads/.gitkeep
+!/backend/storage/test-tmp/.gitkeep
 *.mp4
 *.mov
 *.mkv
