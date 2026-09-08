@@ -8,12 +8,39 @@ const config = require('../config');
 // there was previously no way to raise this without a code change.
 const FFMPEG_TIMEOUT_MS = config.ffmpeg.timeoutMs;
 
+/**
+ * Mirrors TranscriptionProviderError (src/transcription/TranscriptionProvider.js):
+ * a missing ffmpeg/ffprobe binary (ENOENT) is a local-environment setup
+ * problem, not a transient fault — retrying it 3-4 times with exponential
+ * backoff (per RETRY_CONFIG) just delays a failure that install-the-binary
+ * is the only real fix for, and buries the actual cause under a generic
+ * "failed after multiple attempts" message. Callers that catch this and
+ * see retryable:false should fail the job immediately with `message`
+ * instead of letting BullMQ retry.
+ */
+class MediaProcessorError extends Error {
+  constructor(message, { retryable = true, reason = 'unknown' } = {}) {
+    super(message);
+    this.name = 'MediaProcessorError';
+    this.retryable = retryable;
+    this.reason = reason;
+  }
+}
+
 function run(binPath, args, { timeout = FFMPEG_TIMEOUT_MS } = {}) {
   return new Promise((resolve, reject) => {
     // execFile never invokes a shell — args are passed as an array, so
     // there is no string for a crafted value to break out of.
     execFile(binPath, args, { timeout, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
+        if (err.code === 'ENOENT') {
+          return reject(
+            new MediaProcessorError(
+              `"${binPath}" is not installed or not on PATH. Install ffmpeg (which provides both ffmpeg and ffprobe) and ensure it's on PATH, or set FFMPEG_PATH/FFPROBE_PATH in .env to an absolute path.`,
+              { retryable: false, reason: 'not_configured' },
+            ),
+          );
+        }
         const e = new Error(`${binPath} failed: ${err.message}`);
         e.stderr = stderr;
         e.killed = err.killed;
@@ -165,4 +192,4 @@ async function validateOutput(outputPath) {
   return { sizeBytes: stat.size, durationSeconds: probeResult.durationSeconds };
 }
 
-module.exports = { probe, extractAudio, renderVerticalClip, generateThumbnail, validateOutput };
+module.exports = { probe, extractAudio, renderVerticalClip, generateThumbnail, validateOutput, MediaProcessorError };

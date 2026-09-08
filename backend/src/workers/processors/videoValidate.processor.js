@@ -5,6 +5,7 @@ const mediaAssetRepository = require('../../repositories/mediaAsset.repository')
 const processingJobRepository = require('../../repositories/processingJob.repository');
 const { getStorageDriver } = require('../../storage');
 const mediaProcessor = require('../../media/MediaProcessor');
+const { MediaProcessorError } = mediaProcessor;
 const quotaService = require('../../services/quota.service');
 const { QUEUE_NAMES, RETRY_CONFIG, getQueue } = require('../../queue/queues');
 
@@ -29,7 +30,17 @@ async function processVideoValidate(job) {
   });
 
   const absolutePath = await storageDriver.getAbsolutePath(mediaAsset.storage_key);
-  const probeResult = await mediaProcessor.probe(absolutePath);
+  let probeResult;
+  try {
+    probeResult = await mediaProcessor.probe(absolutePath);
+  } catch (err) {
+    if (err instanceof MediaProcessorError && !err.retryable) {
+      await rejectAsset(processingJobId, mediaAssetId, err.message);
+      logger.warn({ processingJobId, mediaAssetId, reason: err.reason }, 'ffmpeg/ffprobe not configured, job failed cleanly');
+      return;
+    }
+    throw err; // retryable — let BullMQ's backoff/retry handle it (though attempts:1 here means none)
+  }
 
   if (!probeResult.durationSeconds) {
     await rejectAsset(processingJobId, mediaAssetId, 'Could not determine video duration — file may be corrupt');
