@@ -5,6 +5,8 @@ const TRUNCATE_TABLES = [
   'processing_errors',
   'processing_job_events',
   'processing_jobs',
+  'media_import_events',
+  'media_imports',
   'media_assets',
   'projects',
   'refresh_tokens',
