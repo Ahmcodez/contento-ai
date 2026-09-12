@@ -10,7 +10,7 @@
  * conditional somewhere else in the codebase.
  */
 class URLProvider {
-  /* eslint-disable class-methods-use-this, no-unused-vars */
+  /* eslint-disable no-unused-vars */
 
   /** Provider identifier stored in media_imports.provider / media_assets.source_provider. */
   get name() {
@@ -47,7 +47,7 @@ class URLProvider {
     throw new Error('URLProvider.download not implemented');
   }
 
-  /* eslint-enable class-methods-use-this, no-unused-vars */
+  /* eslint-enable no-unused-vars */
 }
 
 /**
@@ -69,4 +69,25 @@ class ProviderError extends Error {
   }
 }
 
-module.exports = { URLProvider, ProviderError };
+/**
+ * Shared hostname-allowlist matcher used by every yt-dlp-backed provider
+ * (YouTube/Vimeo/TikTok/Dropbox). Deliberately an exact-hostname
+ * allowlist, not a substring/regex match on the full URL — checking
+ * `url.includes('youtube.com')` would also match
+ * `https://evil.com/?redirect=youtube.com` or
+ * `https://youtube.com.evil.com/`, both of which would then hand an
+ * attacker-controlled URL to the yt-dlp subprocess. Comparing
+ * `new URL(url).hostname` against an exact list closes that.
+ */
+function matchesHost(url, allowedHosts) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+  return allowedHosts.includes(parsed.hostname.toLowerCase());
+}
+
+module.exports = { URLProvider, ProviderError, matchesHost };

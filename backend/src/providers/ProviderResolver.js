@@ -1,10 +1,14 @@
 const { ProviderError } = require('./URLProvider');
+const YouTubeProvider = require('./YouTubeProvider');
+const VimeoProvider = require('./VimeoProvider');
+const TikTokProvider = require('./TikTokProvider');
+const DropboxProvider = require('./DropboxProvider');
 const DirectMediaProvider = require('./DirectMediaProvider');
 
 /**
- * Registered in priority order: more specific providers (YouTube,
- * Vimeo, TikTok, Dropbox — added in a following change once the
- * isolated yt-dlp runner exists) are checked before the permissive
+ * Registered in priority order: specific providers (YouTube, Vimeo,
+ * TikTok, Dropbox — each a strict hostname allowlist, see
+ * URLProvider.js's matchesHost) are checked before the permissive
  * extension-based DirectMediaProvider fallback, so e.g. a YouTube share
  * URL is never accidentally treated as a direct file.
  *
@@ -13,7 +17,13 @@ const DirectMediaProvider = require('./DirectMediaProvider');
  * nothing else in the ingestion pipeline (service/controller/queue/
  * processors) ever branches on provider identity.
  */
-const PROVIDERS = [new DirectMediaProvider()];
+const PROVIDERS = [
+  new YouTubeProvider(),
+  new VimeoProvider(),
+  new TikTokProvider(),
+  new DropboxProvider(),
+  new DirectMediaProvider(),
+];
 
 /**
  * Returns the first registered provider whose canHandle(url) matches.
@@ -24,7 +34,7 @@ function resolveProvider(url) {
   const provider = PROVIDERS.find((p) => p.canHandle(url));
   if (!provider) {
     throw new ProviderError(
-      'This URL is not from a supported source. Supported: direct video file links (.mp4, .mov, .mkv, .webm).',
+      'This URL is not from a supported source. Supported: YouTube, Vimeo, TikTok, Dropbox, and direct video file links (.mp4, .mov, .mkv, .webm).',
       { retryable: false, reason: 'unsupported_provider', statusCode: 422 },
     );
   }

@@ -118,6 +118,20 @@ const envSchema = z.object({
   // input (which is what the timeout is actually meant to guard against).
   FFMPEG_TIMEOUT_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
 
+  // yt-dlp powers the YouTube/Vimeo/TikTok/Dropbox URL-import providers
+  // (src/providers/) — a separate binary from ffmpeg, installed via
+  // `pip install yt-dlp`, not bundled with this app. See
+  // docs/URL_IMPORT.md before changing YTDLP_PATH.
+  YTDLP_PATH: z.string().default('yt-dlp'),
+  // Metadata (-J, dump-JSON) is a single API-like call and should be
+  // fast; a real download is a different, much longer-running operation
+  // with its own timeout below. Separate limits because a slow metadata
+  // fetch blocking the WAITING_CONFIRMATION preview for 10+ minutes
+  // would be a bad user experience even though a 10-minute download
+  // ceiling is perfectly reasonable.
+  YTDLP_METADATA_TIMEOUT_MS: z.coerce.number().int().positive().default(20 * 1000),
+  YTDLP_DOWNLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
 });
@@ -245,6 +259,12 @@ function loadConfig() {
       ffprobePath: env.FFPROBE_PATH,
       outputMaxSizeMb: env.FFMPEG_OUTPUT_MAX_SIZE_MB,
       timeoutMs: env.FFMPEG_TIMEOUT_MS,
+    },
+
+    ytdlp: {
+      path: env.YTDLP_PATH,
+      metadataTimeoutMs: env.YTDLP_METADATA_TIMEOUT_MS,
+      downloadTimeoutMs: env.YTDLP_DOWNLOAD_TIMEOUT_MS,
     },
 
     queue: {
