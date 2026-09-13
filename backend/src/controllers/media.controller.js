@@ -1,4 +1,5 @@
 const mediaService = require('../services/media.service');
+const urlImportService = require('../services/urlImport.service');
 const asyncHandler = require('../utils/asyncHandler');
 
 const upload = asyncHandler(async (req, res) => {
@@ -23,4 +24,19 @@ const getOne = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { upload, getOne };
+const createUrlImport = asyncHandler(async (req, res) => {
+  const mediaImport = await urlImportService.createImport(req.user.id, req.params.id, req.body.url);
+  res.status(202).json({ mediaImport });
+});
+
+const getUrlImport = asyncHandler(async (req, res) => {
+  const mediaImport = await urlImportService.getImport(req.user.id, req.params.mediaImportId);
+  res.status(200).json({ mediaImport });
+});
+
+const confirmUrlImport = asyncHandler(async (req, res) => {
+  const mediaImport = await urlImportService.confirmImport(req.user.id, req.params.mediaImportId);
+  res.status(200).json({ mediaImport });
+});
+
+module.exports = { upload, getOne, createUrlImport, getUrlImport, confirmUrlImport };
