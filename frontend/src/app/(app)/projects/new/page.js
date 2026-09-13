@@ -4,13 +4,21 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input, Textarea } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import Tabs from '@/components/ui/Tabs';
 import UploadDropzone from '@/components/upload/UploadDropzone';
+import PasteUrlImport from '@/components/upload/PasteUrlImport';
 import { createProject } from '@/lib/api/projects';
 import { ApiError } from '@/lib/api/client';
+
+const SOURCE_TABS = [
+  { id: 'upload', label: 'Upload video' },
+  { id: 'url', label: 'Paste video URL' },
+];
 
 export default function NewProjectPage() {
   const router = useRouter();
   const [step, setStep] = useState('details'); // details | upload
+  const [source, setSource] = useState('upload'); // upload | url
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [project, setProject] = useState(null);
@@ -34,6 +42,10 @@ export default function NewProjectPage() {
 
   function handleUploaded(result) {
     router.push(`/projects/${project.id}/jobs/${result.processingJob.id}`);
+  }
+
+  function handleImported({ processingJobId }) {
+    router.push(`/projects/${project.id}/jobs/${processingJobId}`);
   }
 
   return (
@@ -66,9 +78,16 @@ export default function NewProjectPage() {
       {step === 'upload' && project && (
         <div className="mt-8">
           <p className="mb-4 text-sm text-steel">
-            <span className="text-graphite">{project.title}</span> — now upload the video to process.
+            <span className="text-graphite">{project.title}</span> — now add the video to process.
           </p>
-          <UploadDropzone projectId={project.id} onUploaded={handleUploaded} />
+
+          <Tabs tabs={SOURCE_TABS} active={source} onChange={setSource} className="mb-5" />
+
+          {source === 'upload' ? (
+            <UploadDropzone projectId={project.id} onUploaded={handleUploaded} />
+          ) : (
+            <PasteUrlImport projectId={project.id} onImported={handleImported} />
+          )}
         </div>
       )}
     </div>
