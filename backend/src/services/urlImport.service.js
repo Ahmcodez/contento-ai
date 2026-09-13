@@ -22,6 +22,7 @@ function serialize(row) {
     width: row.width,
     height: row.height,
     mediaAssetId: row.media_asset_id,
+    processingJobId: row.processing_job_id,
     errorMessage: row.error_message,
     failureStage: row.failure_stage,
     createdAt: row.created_at,

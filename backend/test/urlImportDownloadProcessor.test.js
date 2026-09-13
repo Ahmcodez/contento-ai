@@ -94,10 +94,10 @@ describe('urlImportDownload.processor', () => {
     const project = await createProject(token);
     const row = await createWaitingImport(project, userId, { title: 'My Video', source_id: 'abc123' });
 
-    // media_imports.media_asset_id has a real FK to media_assets, so the
-    // mocked createMediaAssetFromLocalFile needs to "create" a row that
-    // actually exists for the subsequent transitionState update to
-    // satisfy that constraint — exactly as the real function would.
+    // media_imports.media_asset_id and .processing_job_id both have real
+    // FKs, so the mocked createMediaAssetFromLocalFile needs to "create"
+    // rows that actually exist for the subsequent transitionState update
+    // to satisfy those constraints — exactly as the real function would.
     const [realAsset] = await db('media_assets')
       .insert({
         project_id: project.id,
@@ -110,11 +110,12 @@ describe('urlImportDownload.processor', () => {
         status: 'uploaded',
       })
       .returning('*');
+    const [realJob] = await db('processing_jobs').insert({ media_asset_id: realAsset.id, state: 'UPLOADED' }).returning('*');
 
     getProviderByName.mockReturnValue({ download: jest.fn().mockResolvedValue({ filePath: 'ignored' }) });
     mediaService.createMediaAssetFromLocalFile.mockResolvedValue({
       mediaAsset: realAsset,
-      processingJob: { id: '22222222-2222-4222-8222-222222222222' },
+      processingJob: realJob,
     });
 
     await processUrlImportDownload({ data: { mediaImportId: row.id } });
@@ -132,6 +133,7 @@ describe('urlImportDownload.processor', () => {
     const updated = await db('media_imports').where({ id: row.id }).first();
     expect(updated.state).toBe('COMPLETED');
     expect(updated.media_asset_id).toBe(realAsset.id);
+    expect(updated.processing_job_id).toBe(realJob.id);
     expect(updated.progress_percent).toBe(100);
   });
 

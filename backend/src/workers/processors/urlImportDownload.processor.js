@@ -68,7 +68,7 @@ module.exports = async function processUrlImportDownload(job) {
   });
 
   try {
-    const { mediaAsset } = await mediaService.createMediaAssetFromLocalFile(
+    const { mediaAsset, processingJob } = await mediaService.createMediaAssetFromLocalFile(
       mediaImport.project_id,
       mediaImport.requested_by,
       tmpPath,
@@ -87,7 +87,7 @@ module.exports = async function processUrlImportDownload(job) {
       fromState: 'VALIDATING_MEDIA',
       toState: 'COMPLETED',
       progressPercent: 100,
-      extra: { media_asset_id: mediaAsset.id },
+      extra: { media_asset_id: mediaAsset.id, processing_job_id: processingJob.id },
     });
   } catch (err) {
     // AppError here (unsupported content, duplicate, project gone) is a
