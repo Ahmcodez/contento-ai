@@ -36,6 +36,9 @@ const urlImportLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  // See the identical comment in middleware/rateLimiter.js — a rate
+  // limiter should fail open, not take the guarded request down with it.
+  passOnStoreError: true,
   store: config.isTest ? undefined : new RedisStore({ sendCommand: (...args) => redis.call(...args), prefix: 'rl:url-import:' }),
   keyGenerator: (req) => (req.user ? `user:${req.user.id}` : req.ip),
   handler: (req, res, next) => next(AppError.tooManyRequests('Too many URL imports requested, please slow down')),
