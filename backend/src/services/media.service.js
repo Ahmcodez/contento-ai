@@ -26,6 +26,85 @@ async function computeChecksum(filePath) {
   });
 }
 
+/**
+ * Shared tail-end of both ingestion paths (upload and URL import): takes
+ * a real local file already sitting on disk, validates its actual bytes
+ * (never a client- or server-reported extension/Content-Type), dedupes
+ * by checksum, moves it into permanent storage, and creates the
+ * media_assets + processing_jobs rows that kick off the one shared
+ * pipeline. This is the exact point the spec's "same pipeline, not a
+ * separate URL-to-clips system" requirement is enforced in code: from
+ * here on, upload and URL-import are running the identical function.
+ *
+ * `sourceMetadata` is optional and only ever set by the URL-import path
+ * (see urlImportDownload.processor.js) — it carries the source_type/
+ * source_provider/source_url/source_id/title columns added specifically
+ * for that flow. Left undefined, every field defaults exactly as it did
+ * before URL import existed (source_type: 'upload').
+ */
+async function createMediaAssetFromLocalFile(projectId, userId, filePath, { displayName, sourceMetadata } = {}) {
+  const detected = await detectVideoContainer(filePath);
+  const detectedMime = detected?.mime;
+  if (!detectedMime || !ALLOWED_MIME_TYPES.has(detectedMime)) {
+    throw AppError.unsupportedMediaType(
+      `File content does not match a supported video format (detected: ${detectedMime || 'unknown'})`,
+    );
+  }
+  const ext = detected.ext || extensionFromFilename(displayName || '');
+
+  const checksum = await computeChecksum(filePath);
+
+  const duplicate = await mediaAssetRepository.findByChecksum(projectId, checksum);
+  if (duplicate) {
+    throw AppError.conflict('This exact video has already been added to this project', 'DUPLICATE_UPLOAD');
+  }
+
+  const project = await projectRepository.findByIdForWorkspaces(projectId, await workspaceService.getWorkspaceIdsForUser(userId));
+  if (!project) {
+    throw AppError.notFound('Project not found');
+  }
+
+  const { size: sizeBytes } = await fsp.stat(filePath);
+  const storageKey = `${project.workspace_id}/${projectId}/${ulid()}${ext}`;
+  const storageDriver = getStorageDriver();
+  await storageDriver.saveFromPath(storageKey, filePath);
+
+  const { mediaAsset, processingJob } = await db.transaction(async (trx) => {
+    const [asset] = await trx('media_assets')
+      .insert({
+        project_id: projectId,
+        uploaded_by: userId,
+        original_filename: sanitizeDisplayFilename(displayName || `video${ext}`),
+        storage_key: storageKey,
+        mime_type: detectedMime,
+        size_bytes: sizeBytes,
+        checksum_sha256: checksum,
+        status: 'uploaded',
+        ...(sourceMetadata
+          ? {
+            source_type: 'url',
+            source_provider: sourceMetadata.provider,
+            source_url: sourceMetadata.sourceUrl,
+            source_id: sourceMetadata.sourceId,
+            title: sourceMetadata.title,
+          }
+          : {}),
+      })
+      .returning('*');
+
+    const job = await processingJobRepository.create(trx, {
+      mediaAssetId: asset.id,
+      state: 'UPLOADED',
+    });
+
+    return { mediaAsset: asset, processingJob: job };
+  });
+
+  await enqueueVideoValidate({ processingJobId: processingJob.id, mediaAssetId: mediaAsset.id });
+
+  return { mediaAsset, processingJob };
+}
+
 async function uploadMedia(userId, projectId, file) {
   if (!file) {
     throw AppError.badRequest('No file uploaded', 'FILE_REQUIRED');
@@ -49,55 +128,7 @@ async function uploadMedia(userId, projectId, file) {
       throw AppError.unsupportedMediaType(`File extension "${ext}" is not supported`);
     }
 
-    // Real content check: sniff the actual file bytes, never trust the
-    // client-supplied Content-Type header alone. Uses a small in-house
-    // sniffer scoped to exactly the 4 formats this app accepts, rather
-    // than a general-purpose "detect anything" library — see
-    // src/utils/detectVideoContainer.js for why (GHSA-5v7r-6r5c-r473).
-    const detected = await detectVideoContainer(file.path);
-    const detectedMime = detected?.mime;
-    if (!detectedMime || !ALLOWED_MIME_TYPES.has(detectedMime)) {
-      throw AppError.unsupportedMediaType(
-        `File content does not match a supported video format (detected: ${detectedMime || 'unknown'})`,
-      );
-    }
-
-    const checksum = await computeChecksum(file.path);
-
-    const duplicate = await mediaAssetRepository.findByChecksum(projectId, checksum);
-    if (duplicate) {
-      throw AppError.conflict('This exact video has already been uploaded to this project', 'DUPLICATE_UPLOAD');
-    }
-
-    const storageKey = `${project.workspace_id}/${projectId}/${ulid()}${ext}`;
-    const storageDriver = getStorageDriver();
-    await storageDriver.saveFromPath(storageKey, file.path);
-
-    const { mediaAsset, processingJob } = await db.transaction(async (trx) => {
-      const [asset] = await trx('media_assets')
-        .insert({
-          project_id: projectId,
-          uploaded_by: userId,
-          original_filename: originalName,
-          storage_key: storageKey,
-          mime_type: detectedMime,
-          size_bytes: file.size,
-          checksum_sha256: checksum,
-          status: 'uploaded',
-        })
-        .returning('*');
-
-      const job = await processingJobRepository.create(trx, {
-        mediaAssetId: asset.id,
-        state: 'UPLOADED',
-      });
-
-      return { mediaAsset: asset, processingJob: job };
-    });
-
-    await enqueueVideoValidate({ processingJobId: processingJob.id, mediaAssetId: mediaAsset.id });
-
-    return { mediaAsset, processingJob };
+    return await createMediaAssetFromLocalFile(projectId, userId, file.path, { displayName: originalName });
   } finally {
     // On any failure after the file landed in storage/DB we still want the
     // temp upload cleaned up; a partially-created storage object without a
@@ -113,4 +144,4 @@ async function getMediaAsset(userId, mediaAssetId) {
   return asset;
 }
 
-module.exports = { uploadMedia, getMediaAsset };
+module.exports = { uploadMedia, getMediaAsset, createMediaAssetFromLocalFile };

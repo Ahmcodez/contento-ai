@@ -1,4 +1,4 @@
-const { enqueueVideoValidate } = require('../src/queue/producers');
+const { enqueueVideoValidate, enqueueUrlImportResolve, enqueueUrlImportDownload } = require('../src/queue/producers');
 const { QUEUE_NAMES, getQueue, closeAllQueues } = require('../src/queue/queues');
 
 describe('queue producers', () => {
@@ -23,5 +23,19 @@ describe('queue producers', () => {
   it('gives the video.validate queue a non-retrying config since validation failures are deterministic', async () => {
     const job = await enqueueVideoValidate({ processingJobId: 'job-2', mediaAssetId: 'asset-2' });
     expect(job.opts.attempts).toBe(1);
+  });
+
+  it('enqueues a url-import.resolve job with the mediaImportId payload', async () => {
+    const job = await enqueueUrlImportResolve({ mediaImportId: 'import-1' });
+    expect(job.name).toBe('url-import.resolve');
+    expect(job.data).toEqual({ mediaImportId: 'import-1' });
+    expect(job.opts.attempts).toBe(2);
+  });
+
+  it('enqueues a url-import.download job with the mediaImportId payload', async () => {
+    const job = await enqueueUrlImportDownload({ mediaImportId: 'import-2' });
+    expect(job.name).toBe('url-import.download');
+    expect(job.data).toEqual({ mediaImportId: 'import-2' });
+    expect(job.opts.attempts).toBe(3);
   });
 });

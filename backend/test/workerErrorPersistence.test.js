@@ -134,4 +134,64 @@ describe('wrapWithErrorPersistence (worker retry-exhaustion / terminal-failure h
     const current = await db('processing_jobs').where({ id: job.id }).first();
     expect(current.state).toBe('FAILED');
   });
+
+  describe('mediaImportId job data shape (URL-import stages)', () => {
+    function fakeImportJob({ mediaImportId, attemptsMade, attempts }) {
+      return { id: 'fake-bullmq-job-id', data: { mediaImportId }, attemptsMade, opts: { attempts } };
+    }
+
+    it('on the final attempt, transitions the media_imports row to FAILED (no processing_errors/processing_jobs touched)', async () => {
+      const { token, userId } = await registerUser('werr6@example.com');
+      const project = await createProject(token);
+      const mediaImportRepository = require('../src/repositories/mediaImport.repository');
+      const mediaImport = await mediaImportRepository.create({ projectId: project.id, requestedBy: userId, sourceUrl: 'https://youtube.com/watch?v=x' });
+      await db('media_imports').where({ id: mediaImport.id }).update({ state: 'FETCHING_METADATA' });
+
+      const handler = jest.fn().mockRejectedValue(new Error('yt-dlp exploded'));
+      const wrapped = wrapWithErrorPersistence('url-import-resolve', handler, 'mediaImportId');
+
+      await wrapped(fakeImportJob({ mediaImportId: mediaImport.id, attemptsMade: 1, attempts: 2 })).catch(() => {});
+
+      const updated = await db('media_imports').where({ id: mediaImport.id }).first();
+      expect(updated.state).toBe('FAILED');
+      expect(updated.failure_stage).toBe('url-import-resolve');
+      expect(updated.error_message).toMatch(/failed after multiple attempts/i);
+
+      // no cross-contamination into the processing_jobs-specific tables
+      const processingErrors = await db('processing_errors').select();
+      expect(processingErrors).toHaveLength(0);
+    });
+
+    it('on a non-final attempt, leaves the media_imports row unchanged for BullMQ to retry', async () => {
+      const { token, userId } = await registerUser('werr7@example.com');
+      const project = await createProject(token);
+      const mediaImportRepository = require('../src/repositories/mediaImport.repository');
+      const mediaImport = await mediaImportRepository.create({ projectId: project.id, requestedBy: userId, sourceUrl: 'https://youtube.com/watch?v=x' });
+      await db('media_imports').where({ id: mediaImport.id }).update({ state: 'FETCHING_METADATA' });
+
+      const handler = jest.fn().mockRejectedValue(new Error('transient'));
+      const wrapped = wrapWithErrorPersistence('url-import-resolve', handler, 'mediaImportId');
+
+      await wrapped(fakeImportJob({ mediaImportId: mediaImport.id, attemptsMade: 0, attempts: 2 })).catch(() => {});
+
+      const updated = await db('media_imports').where({ id: mediaImport.id }).first();
+      expect(updated.state).toBe('FETCHING_METADATA');
+    });
+
+    it('does not clobber an already-COMPLETED media_imports row back to FAILED', async () => {
+      const { token, userId } = await registerUser('werr8@example.com');
+      const project = await createProject(token);
+      const mediaImportRepository = require('../src/repositories/mediaImport.repository');
+      const mediaImport = await mediaImportRepository.create({ projectId: project.id, requestedBy: userId, sourceUrl: 'https://youtube.com/watch?v=x' });
+      await db('media_imports').where({ id: mediaImport.id }).update({ state: 'COMPLETED' });
+
+      const handler = jest.fn().mockRejectedValue(new Error('late failure after completion'));
+      const wrapped = wrapWithErrorPersistence('url-import-download', handler, 'mediaImportId');
+
+      await wrapped(fakeImportJob({ mediaImportId: mediaImport.id, attemptsMade: 2, attempts: 3 })).catch(() => {});
+
+      const updated = await db('media_imports').where({ id: mediaImport.id }).first();
+      expect(updated.state).toBe('COMPLETED');
+    });
+  });
 });

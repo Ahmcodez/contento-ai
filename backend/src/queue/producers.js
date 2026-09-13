@@ -15,4 +15,33 @@ async function enqueueVideoValidate({ processingJobId, mediaAssetId }) {
   );
 }
 
-module.exports = { enqueueVideoValidate };
+/**
+ * Enqueues provider detection + metadata preview for a just-created
+ * media_imports row (state DETECTING_PROVIDER) — the URL-import
+ * equivalent of enqueueVideoValidate, kicked off right after the user
+ * pastes a URL. See urlImportResolve.processor.js.
+ */
+async function enqueueUrlImportResolve({ mediaImportId }) {
+  const queue = getQueue(QUEUE_NAMES.URL_IMPORT_RESOLVE);
+  return queue.add(
+    'url-import.resolve',
+    { mediaImportId },
+    { ...RETRY_CONFIG[QUEUE_NAMES.URL_IMPORT_RESOLVE], removeOnComplete: 100, removeOnFail: 500 },
+  );
+}
+
+/**
+ * Enqueues the actual download, only ever called after the user has
+ * confirmed a WAITING_CONFIRMATION preview (see urlImport.service.js's
+ * confirmImport). See urlImportDownload.processor.js.
+ */
+async function enqueueUrlImportDownload({ mediaImportId }) {
+  const queue = getQueue(QUEUE_NAMES.URL_IMPORT_DOWNLOAD);
+  return queue.add(
+    'url-import.download',
+    { mediaImportId },
+    { ...RETRY_CONFIG[QUEUE_NAMES.URL_IMPORT_DOWNLOAD], removeOnComplete: 100, removeOnFail: 500 },
+  );
+}
+
+module.exports = { enqueueVideoValidate, enqueueUrlImportResolve, enqueueUrlImportDownload };

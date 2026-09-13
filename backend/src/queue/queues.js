@@ -2,6 +2,8 @@ const { Queue } = require('bullmq');
 const connection = require('../redis/client');
 
 const QUEUE_NAMES = {
+  URL_IMPORT_RESOLVE: 'url-import-resolve',
+  URL_IMPORT_DOWNLOAD: 'url-import-download',
   VIDEO_VALIDATE: 'video-validate',
   AUDIO_EXTRACT: 'audio-extract',
   TRANSCRIPTION_PROCESS: 'transcription-process',
@@ -14,6 +16,16 @@ const QUEUE_NAMES = {
 };
 
 const RETRY_CONFIG = {
+  // Resolving the provider + fetching a metadata preview is a single
+  // lightweight network call (or subprocess call, for yt-dlp-backed
+  // providers) — a couple of retries covers a transient blip without
+  // making the user wait too long for a preview that's about to fail
+  // anyway if the URL is genuinely bad.
+  [QUEUE_NAMES.URL_IMPORT_RESOLVE]: { attempts: 2, backoff: { type: 'exponential', delay: 3000 } },
+  // The actual download is the long-running, network-heavy step —
+  // more attempts, longer backoff, matching AUDIO_EXTRACT/TRANSCRIPTION_
+  // PROCESS's reasoning for similarly substantial operations.
+  [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
   [QUEUE_NAMES.VIDEO_VALIDATE]: { attempts: 1 },
   [QUEUE_NAMES.AUDIO_EXTRACT]: { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
   [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: { attempts: 4, backoff: { type: 'exponential', delay: 5000 } },
@@ -30,13 +42,13 @@ const queues = {};
 function getQueue(name) {
   if (!queues[name]) {
     // Each Queue gets its own duplicated connection rather than sharing
-    // the one base connection across all 9 queues (+ 8 Workers in
-    // src/workers/index.js). Sharing a single socket across that many
-    // BullMQ consumers is a documented BullMQ anti-pattern and a common,
-    // real cause of spontaneous "read ECONNRESET" under load — see the
-    // doc comment in src/redis/client.js. .duplicate() reuses the same
-    // connection options (retryStrategy, keepAlive, credentials) while
-    // giving each queue its own socket.
+    // the one base connection across every queue (+ a matching Worker
+    // for each, in src/workers/index.js). Sharing a single socket across
+    // that many BullMQ consumers is a documented BullMQ anti-pattern and
+    // a common, real cause of spontaneous "read ECONNRESET" under load —
+    // see the doc comment in src/redis/client.js. .duplicate() reuses
+    // the same connection options (retryStrategy, keepAlive, credentials)
+    // while giving each queue its own socket.
     queues[name] = new Queue(name, { connection: connection.duplicate() });
   }
   return queues[name];
