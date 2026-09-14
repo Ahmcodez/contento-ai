@@ -92,6 +92,20 @@ describe('YtDlpRunner', () => {
       });
     });
 
+    it('logs the raw stderr server-side on an unrecognized failure, so it is diagnosable without reproducing by hand', async () => {
+      const logger = require('../src/logger');
+      const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+      mockExecFileOnce((bin, args, opts, cb) => cb(new Error('Command failed'), '', 'ERROR: Postprocessing: ffprobe and ffmpeg not found'));
+
+      await expect(ytdlpRunner.getMetadataJson('https://youtube.com/watch?v=abc')).rejects.toMatchObject({ reason: 'extraction_failed' });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ stderr: expect.stringContaining('ffprobe and ffmpeg not found') }),
+        expect.stringContaining('unrecognized stderr'),
+      );
+      warnSpy.mockRestore();
+    });
+
     it('classifies a missing yt-dlp binary (ENOENT) as non-retryable and actionable', async () => {
       const err = new Error('spawn yt-dlp ENOENT');
       err.code = 'ENOENT';

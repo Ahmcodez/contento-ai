@@ -1,5 +1,6 @@
 const { execFile } = require('child_process');
 const config = require('../config');
+const logger = require('../logger');
 const { ProviderError } = require('./URLProvider');
 
 /**
@@ -51,8 +52,17 @@ function classifyStderr(stderr) {
   if (match) {
     return new ProviderError(match.message, { retryable: false, reason: match.reason, statusCode: 422 });
   }
-  // Unrecognized failure — treat as transient/retryable (network blip,
-  // yt-dlp internal error, etc.) rather than assuming it's permanent.
+  // Unrecognized failure — the ProviderError.message stays generic and
+  // user-safe (never surface a raw subprocess error to a client), but
+  // that must never mean the actual cause is lost: log the real stderr
+  // server-side so it's diagnosable from worker logs alone, rather than
+  // requiring someone to reproduce the failure by hand to even see what
+  // went wrong. This is exactly the gap that made a real production
+  // yt-dlp failure (unrecognized stderr, 13-minute runtime, no visible
+  // cause) need manual reproduction to debug at all.
+  logger.warn({ stderr: stderr?.slice(0, 4000) }, 'yt-dlp failed with an unrecognized stderr pattern');
+  // Treat as transient/retryable (network blip, yt-dlp internal error,
+  // etc.) rather than assuming it's permanent.
   return new ProviderError('The video could not be imported from this source right now.', { retryable: true, reason: 'extraction_failed', statusCode: 422 });
 }
 
