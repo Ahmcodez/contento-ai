@@ -112,7 +112,9 @@ describe('urlImportDownload.processor', () => {
       .returning('*');
     const [realJob] = await db('processing_jobs').insert({ media_asset_id: realAsset.id, state: 'UPLOADED' }).returning('*');
 
-    getProviderByName.mockReturnValue({ download: jest.fn().mockResolvedValue({ filePath: 'ignored' }) });
+    getProviderByName.mockReturnValue({
+      download: jest.fn().mockResolvedValue({ filePath: path.join(config.storage.tmpPath, `import-${row.id}.mp4`) }),
+    });
     mediaService.createMediaAssetFromLocalFile.mockResolvedValue({
       mediaAsset: realAsset,
       processingJob: realJob,
@@ -135,6 +137,48 @@ describe('urlImportDownload.processor', () => {
     expect(updated.media_asset_id).toBe(realAsset.id);
     expect(updated.processing_job_id).toBe(realJob.id);
     expect(updated.progress_percent).toBe(100);
+  });
+
+  it('uses the provider\'s actual returned filePath, not the originally-requested path, when they differ (the diagnosed real-world yt-dlp bug)', async () => {
+    const { token, userId } = await registerUser('dl4b@example.com');
+    const project = await createProject(token);
+    const row = await createWaitingImport(project, userId, { title: 'My Video' });
+
+    const [realAsset] = await db('media_assets')
+      .insert({
+        project_id: project.id,
+        uploaded_by: userId,
+        original_filename: 'my-video.mp4',
+        storage_key: `${project.workspace_id}/${project.id}/fake2.mp4`,
+        mime_type: 'video/mp4',
+        size_bytes: 1024,
+        checksum_sha256: `checksum-${Date.now()}-b`,
+        status: 'uploaded',
+      })
+      .returning('*');
+    const [realJob] = await db('processing_jobs').insert({ media_asset_id: realAsset.id, state: 'UPLOADED' }).returning('*');
+
+    // Simulates yt-dlp's documented behavior: the real post-merge output
+    // file can land at a different path than the one requested via -o.
+    const requestedPath = path.join(config.storage.tmpPath, `import-${row.id}.mp4`);
+    const actualDifferentPath = path.join(config.storage.tmpPath, `import-${row.id}.fXXX.mp4`);
+    getProviderByName.mockReturnValue({ download: jest.fn().mockResolvedValue({ filePath: actualDifferentPath }) });
+    mediaService.createMediaAssetFromLocalFile.mockResolvedValue({ mediaAsset: realAsset, processingJob: realJob });
+
+    await processUrlImportDownload({ data: { mediaImportId: row.id } });
+
+    // The handoff must use the real path yt-dlp reported, never the
+    // originally-requested one it can't be assumed to have honored.
+    expect(mediaService.createMediaAssetFromLocalFile).toHaveBeenCalledWith(
+      project.id,
+      userId,
+      actualDifferentPath,
+      expect.anything(),
+    );
+    expect(mediaService.createMediaAssetFromLocalFile).not.toHaveBeenCalledWith(project.id, userId, requestedPath, expect.anything());
+
+    const updated = await db('media_imports').where({ id: row.id }).first();
+    expect(updated.state).toBe('COMPLETED');
   });
 
   it('fails cleanly when createMediaAssetFromLocalFile rejects with an AppError (e.g. unsupported content)', async () => {

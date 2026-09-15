@@ -46,8 +46,8 @@ describe('YtDlpRunner', () => {
   });
 
   describe('downloadTo', () => {
-    it('passes --max-filesize when maxBytes is given, and --ffmpeg-location for muxing', async () => {
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '', ''));
+    it('passes --max-filesize when maxBytes is given, --ffmpeg-location for muxing, and --print after_move:filepath', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.mp4\n', ''));
       await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', { maxBytes: 500000000 });
       const [, args] = execFile.mock.calls[0];
       expect(args).toContain('--max-filesize');
@@ -55,13 +55,46 @@ describe('YtDlpRunner', () => {
       expect(args).toContain('--ffmpeg-location');
       expect(args).toContain('-o');
       expect(args).toContain('/tmp/out.mp4');
+      expect(args).toContain('--print');
+      expect(args).toContain('after_move:filepath');
+      expect(args).toContain('--quiet');
     });
 
     it('omits --max-filesize when no maxBytes is given', async () => {
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '', ''));
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.mp4\n', ''));
       await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
       const [, args] = execFile.mock.calls[0];
       expect(args).not.toContain('--max-filesize');
+    });
+
+    it('returns the requested path when yt-dlp confirms the file landed exactly there', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.mp4\n', ''));
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
+      expect(result.filePath).toBe('/tmp/out.mp4');
+    });
+
+    it('returns yt-dlp\'s actual final path when post-processing moved the file somewhere other than the requested -o value (the diagnosed real-world bug)', async () => {
+      // Documented yt-dlp behavior: merging/post-processing can land the
+      // real output at a different path than -o requested. This is
+      // exactly what --print after_move:filepath exists to reveal.
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.fXXX.mp4\n', ''));
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
+      expect(result.filePath).toBe('/tmp/out.fXXX.mp4');
+    });
+
+    it('ignores blank lines and returns the last non-empty line as the real path', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '\n\n/tmp/out.mp4\n\n', ''));
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
+      expect(result.filePath).toBe('/tmp/out.mp4');
+    });
+
+    it('throws a retryable ProviderError if stdout is empty (output location could not be determined)', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '', ''));
+      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {})).rejects.toMatchObject({
+        name: 'ProviderError',
+        retryable: true,
+        reason: 'extraction_failed',
+      });
     });
   });
 

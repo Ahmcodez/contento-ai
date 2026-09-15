@@ -116,11 +116,25 @@ async function getMetadataJson(url) {
  * yt-dlp still has to mux separate video+audio streams, using the
  * ffmpeg this app already depends on (see MediaProcessor.js) via
  * --ffmpeg-location.
+ *
+ * Diagnosed against a real download: yt-dlp does NOT guarantee the
+ * final file ends up at exactly the `-o` path once merging/post-
+ * processing is involved — this is documented yt-dlp behavior, not a
+ * bug in how it's invoked here ("Due to post-processing (i.e. merging
+ * etc.), the actual output filename might differ" — yt-dlp manual).
+ * `--print after_move:filepath` is yt-dlp's own documented mechanism
+ * for learning the real final path, printed as the last line of stdout
+ * once every post-processing step (merge, move) is complete — the
+ * returned filePath is always this actual, verified location, never
+ * the originally-requested destPath assumed to have been honored.
+ * --quiet suppresses yt-dlp's normal progress/status output so the
+ * `--print` line is reliably the only thing worth parsing from stdout.
  */
 async function downloadTo(url, destPath, { maxBytes } = {}) {
   const args = [
     '--no-playlist',
     '--no-warnings',
+    '--quiet',
     '-f',
     'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/best[height<=1080]/best',
     '--merge-output-format',
@@ -129,14 +143,24 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
     config.ffmpeg.ffmpegPath,
     '-o',
     destPath,
+    '--print',
+    'after_move:filepath',
   ];
   if (maxBytes) {
     args.push('--max-filesize', String(maxBytes));
   }
   args.push(url);
 
-  await run(args, { timeoutMs: config.ytdlp.downloadTimeoutMs });
-  return { filePath: destPath };
+  const { stdout } = await run(args, { timeoutMs: config.ytdlp.downloadTimeoutMs });
+  const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
+  const actualPath = lines[lines.length - 1];
+  if (!actualPath) {
+    throw new ProviderError(
+      'The download finished but its output location could not be determined.',
+      { retryable: true, reason: 'extraction_failed' },
+    );
+  }
+  return { filePath: actualPath };
 }
 
 module.exports = { getMetadataJson, downloadTo, classifyStderr };

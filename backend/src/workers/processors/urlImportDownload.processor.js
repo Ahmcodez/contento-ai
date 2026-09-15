@@ -37,16 +37,29 @@ module.exports = async function processUrlImportDownload(job) {
 
   const provider = getProviderByName(mediaImport.provider) || resolveProvider(mediaImport.source_url);
   const maxBytes = config.limits.maxUploadSizeMb * 1024 * 1024;
-  const tmpPath = path.join(config.storage.tmpPath, `import-${mediaImportId}.mp4`);
+  const requestedPath = path.join(config.storage.tmpPath, `import-${mediaImportId}.mp4`);
+  // The file actually used from here on — starts as our best guess
+  // (correct for DirectMediaProvider, which always writes to exactly
+  // the given path) but is overwritten with provider.download()'s
+  // *returned* filePath once we have it, since yt-dlp-backed providers
+  // don't guarantee the final post-merge file lands at the requested
+  // path (see the doc comment on YtDlpRunner.downloadTo). Cleanup and
+  // the createMediaAssetFromLocalFile handoff both use whichever path
+  // is actually correct at that point, never the original guess.
+  let actualPath = requestedPath;
 
   const cleanupTmp = async () => {
-    await fs.rm(tmpPath, { force: true }).catch(() => {});
-    await fs.rm(`${tmpPath}.part`, { force: true }).catch(() => {}); // yt-dlp leaves a .part file on interruption
+    await fs.rm(actualPath, { force: true }).catch(() => {});
+    if (actualPath !== requestedPath) {
+      await fs.rm(requestedPath, { force: true }).catch(() => {});
+    }
+    await fs.rm(`${requestedPath}.part`, { force: true }).catch(() => {}); // yt-dlp leaves a .part file on interruption
   };
 
   try {
     await fs.mkdir(config.storage.tmpPath, { recursive: true });
-    await provider.download(mediaImport.source_url, tmpPath, { maxBytes });
+    const downloadResult = await provider.download(mediaImport.source_url, requestedPath, { maxBytes });
+    actualPath = downloadResult?.filePath || requestedPath;
   } catch (err) {
     await cleanupTmp();
     if (err instanceof ProviderError && !err.retryable) {
@@ -71,7 +84,7 @@ module.exports = async function processUrlImportDownload(job) {
     const { mediaAsset, processingJob } = await mediaService.createMediaAssetFromLocalFile(
       mediaImport.project_id,
       mediaImport.requested_by,
-      tmpPath,
+      actualPath,
       {
         displayName: mediaImport.title || `${mediaImport.provider || 'video'}-import`,
         sourceMetadata: {
