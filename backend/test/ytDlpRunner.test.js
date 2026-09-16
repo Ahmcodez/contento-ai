@@ -10,6 +10,24 @@ function mockExecFileOnce(impl) {
   execFile.mockImplementationOnce((bin, args, opts, cb) => impl(bin, args, opts, cb));
 }
 
+// downloadTo now verifies each candidate with MediaProcessor.probe(),
+// which itself calls execFile for ffprobe — a second, separate mocked
+// call from the yt-dlp invocation itself. Matches probe()'s actual
+// expected ffprobe JSON shape (src/media/MediaProcessor.js).
+function mockProbeOnce({ hasAudio }) {
+  mockExecFileOnce((bin, args, opts, cb) => cb(
+    null,
+    JSON.stringify({
+      streams: [
+        { codec_type: 'video', codec_name: 'h264', width: 1920, height: 1080 },
+        ...(hasAudio ? [{ codec_type: 'audio', codec_name: 'aac' }] : []),
+      ],
+      format: { duration: '10.5' },
+    }),
+    '',
+  ));
+}
+
 describe('YtDlpRunner', () => {
   afterEach(() => jest.clearAllMocks());
 
@@ -54,6 +72,7 @@ describe('YtDlpRunner', () => {
       const dest = path.join(dir, 'out.mp4');
       fs.writeFileSync(dest, 'video');
       mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      mockProbeOnce({ hasAudio: true });
       await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, { maxBytes: 500000000 });
       const [, args] = execFile.mock.calls[0];
       expect(args).toContain('--max-filesize');
@@ -72,17 +91,19 @@ describe('YtDlpRunner', () => {
       const dest = path.join(dir, 'out.mp4');
       fs.writeFileSync(dest, 'video');
       mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      mockProbeOnce({ hasAudio: true });
       await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
       const [, args] = execFile.mock.calls[0];
       expect(args).not.toContain('--max-filesize');
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it('returns the requested path when yt-dlp confirms the file landed exactly there', async () => {
+    it('returns the requested path when it exists and has both audio and video', async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-ok-'));
       const dest = path.join(dir, 'out.mp4');
       fs.writeFileSync(dest, 'video');
       mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      mockProbeOnce({ hasAudio: true });
       const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
       expect(result.filePath).toBe(dest);
       fs.rmSync(dir, { recursive: true, force: true });
@@ -94,6 +115,7 @@ describe('YtDlpRunner', () => {
       const actual = path.join(dir, 'out.fXXX.mp4');
       fs.writeFileSync(actual, 'video');
       mockExecFileOnce((bin, args, opts, cb) => cb(null, `${actual}\n`, ''));
+      mockProbeOnce({ hasAudio: true });
       const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
       expect(result.filePath).toBe(actual);
       fs.rmSync(dir, { recursive: true, force: true });
@@ -108,10 +130,62 @@ describe('YtDlpRunner', () => {
       const real = path.join(dir, 'import-abc123.f137.mp4');
       fs.writeFileSync(real, 'the actual video bytes');
       mockExecFileOnce((bin, args, opts, cb) => cb(null, `${path.join(dir, 'bogus.mp4')}\n`, ''));
+      mockProbeOnce({ hasAudio: true });
 
       const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
 
       expect(result.filePath).toBe(real);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('rejects a recovered file that has video but no audio, and tries the next candidate instead of accepting it', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-noaudio-'));
+      const dest = path.join(dir, 'import-abc.mp4');
+      const videoOnlyFragment = path.join(dir, 'import-abc.f137.mp4');
+      const realMerged = path.join(dir, 'import-abc.f-merged.mp4');
+      // Fragment written first/smaller, real merged file larger — larger
+      // sorts first, so this also confirms audio verification (not just
+      // size ordering) is what actually decides the winner here: put the
+      // no-audio file first in size order to prove it gets skipped.
+      fs.writeFileSync(videoOnlyFragment, 'x'.repeat(200));
+      fs.writeFileSync(realMerged, 'y'.repeat(100));
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '\n', ''));
+      mockProbeOnce({ hasAudio: false }); // the larger, video-only fragment, checked first
+      mockProbeOnce({ hasAudio: true }); // the smaller, actually-merged file
+
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
+
+      expect(result.filePath).toBe(realMerged);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('fails with a specific merge_failed error when every candidate has video but no audio (the diagnosed real-world bug)', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-mergefail-'));
+      const dest = path.join(dir, 'import-abc.mp4');
+      fs.writeFileSync(dest, 'video-only output');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      mockProbeOnce({ hasAudio: false });
+
+      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {})).rejects.toMatchObject({
+        name: 'ProviderError',
+        retryable: false,
+        reason: 'merge_failed',
+        message: expect.stringContaining('audio track could not be merged'),
+      });
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('excludes audio-only fragments (.m4a) from directory-scan candidates entirely', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-m4a-'));
+      const dest = path.join(dir, 'import-abc.mp4');
+      const realMerged = path.join(dir, 'import-abc.merged.mp4');
+      fs.writeFileSync(path.join(dir, 'import-abc.f140.m4a'), 'z'.repeat(500)); // larger than the real file, but wrong extension
+      fs.writeFileSync(realMerged, 'the real video');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '\n', ''));
+      mockProbeOnce({ hasAudio: true });
+
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
+      expect(result.filePath).toBe(realMerged);
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
