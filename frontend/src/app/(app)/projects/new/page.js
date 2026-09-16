@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input, Textarea } from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
@@ -40,13 +40,21 @@ export default function NewProjectPage() {
     }
   }
 
-  function handleUploaded(result) {
-    router.push(`/projects/${project.id}/jobs/${result.processingJob.id}`);
-  }
+  // Stable identities: PasteUrlImport fires onImported from an effect,
+  // so a new function object on every render would re-trigger it.
+  const handleUploaded = useCallback(
+    (result) => {
+      router.push(`/projects/${project.id}/jobs/${result.processingJob.id}`);
+    },
+    [router, project],
+  );
 
-  function handleImported({ processingJobId }) {
-    router.push(`/projects/${project.id}/jobs/${processingJobId}`);
-  }
+  const handleImported = useCallback(
+    ({ processingJobId }) => {
+      router.push(`/projects/${project.id}/jobs/${processingJobId}`);
+    },
+    [router, project],
+  );
 
   return (
     <div className="mx-auto max-w-xl">

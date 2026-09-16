@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ProgressBar from '@/components/ui/ProgressBar';
@@ -69,9 +69,30 @@ export default function PasteUrlImport({ projectId, onImported }) {
     setMediaImportId(null);
   }
 
-  if (mediaImport?.state === 'COMPLETED') {
-    onImported({ mediaAssetId: mediaImport.mediaAssetId, processingJobId: mediaImport.processingJobId });
-    return null;
+  // Fire the completion callback from an effect, never during render.
+  // Calling it inline in the render path meant the parent's
+  // router.push() ran while this component was still rendering, which
+  // React rejects ("Cannot update a component while rendering a
+  // different component") and which produces a broken navigation.
+  const isComplete = mediaImport?.state === 'COMPLETED';
+  const completedJobId = mediaImport?.processingJobId;
+  const completedAssetId = mediaImport?.mediaAssetId;
+
+  useEffect(() => {
+    if (isComplete && completedJobId) {
+      onImported({ mediaAssetId: completedAssetId, processingJobId: completedJobId });
+    }
+  }, [isComplete, completedJobId, completedAssetId, onImported]);
+
+  if (isComplete) {
+    return (
+      <div className="rounded-lg border border-mist p-6">
+        <div className="flex items-center gap-3">
+          <span className="h-4 w-4 animate-spin rounded-full border-[1.5px] border-steel border-t-transparent" />
+          <p className="text-sm text-graphite">Import complete — opening your project…</p>
+        </div>
+      </div>
+    );
   }
 
   if (!mediaImportId) {
