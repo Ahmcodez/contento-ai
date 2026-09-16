@@ -1,4 +1,6 @@
 const { execFile } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 const config = require('../config');
 const logger = require('../logger');
 const { ProviderError } = require('./URLProvider');
@@ -153,14 +155,51 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
 
   const { stdout } = await run(args, { timeoutMs: config.ytdlp.downloadTimeoutMs });
   const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
-  const actualPath = lines[lines.length - 1];
-  if (!actualPath) {
-    throw new ProviderError(
-      'The download finished but its output location could not be determined.',
-      { retryable: true, reason: 'extraction_failed' },
-    );
+  const reportedPath = lines[lines.length - 1];
+
+  // Trust but verify. `--print after_move:filepath` is the documented
+  // way to learn the real post-processing output path, but it has
+  // proven unreliable in practice across yt-dlp versions/platforms
+  // (it can be suppressed, or report a path that doesn't exist on
+  // disk). Rather than assume either the requested path OR the
+  // reported one is correct, check what actually exists, and fall back
+  // to scanning the output directory for the file yt-dlp really wrote.
+  const candidates = [reportedPath, destPath].filter(Boolean);
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return { filePath: candidate };
+    }
   }
-  return { filePath: actualPath };
+
+  // Neither candidate exists — find whatever yt-dlp actually produced,
+  // matching on the unique basename we requested (e.g. "import-<uuid>")
+  // so a concurrent import's file can never be picked up by mistake.
+  const outDir = path.dirname(destPath);
+  const stem = path.basename(destPath, path.extname(destPath));
+  let found = null;
+  try {
+    found = fs
+      .readdirSync(outDir)
+      .filter((f) => f.startsWith(stem) && !f.endsWith('.part'))
+      .map((f) => path.join(outDir, f))
+      .sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || null;
+  } catch {
+    found = null;
+  }
+
+  if (found) {
+    logger.warn({ reportedPath, requestedPath: destPath, found }, 'yt-dlp output path mismatch; recovered by scanning the output directory');
+    return { filePath: found };
+  }
+
+  logger.error(
+    { reportedPath, requestedPath: destPath, outDir, stdout: stdout?.slice(0, 2000) },
+    'yt-dlp reported success but no output file could be found',
+  );
+  throw new ProviderError(
+    'The download finished but its output file could not be found.',
+    { retryable: true, reason: 'extraction_failed' },
+  );
 }
 
 module.exports = { getMetadataJson, downloadTo, classifyStderr };

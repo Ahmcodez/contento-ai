@@ -1,4 +1,7 @@
 jest.mock('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { execFile } = require('child_process');
 const ytdlpRunner = require('../src/providers/YtDlpRunner');
 const { ProviderError } = require('../src/providers/URLProvider');
@@ -47,54 +50,106 @@ describe('YtDlpRunner', () => {
 
   describe('downloadTo', () => {
     it('passes --max-filesize when maxBytes is given, --ffmpeg-location for muxing, and --print after_move:filepath', async () => {
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.mp4\n', ''));
-      await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', { maxBytes: 500000000 });
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-args-'));
+      const dest = path.join(dir, 'out.mp4');
+      fs.writeFileSync(dest, 'video');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, { maxBytes: 500000000 });
       const [, args] = execFile.mock.calls[0];
       expect(args).toContain('--max-filesize');
       expect(args).toContain('500000000');
       expect(args).toContain('--ffmpeg-location');
       expect(args).toContain('-o');
-      expect(args).toContain('/tmp/out.mp4');
+      expect(args).toContain(dest);
       expect(args).toContain('--print');
       expect(args).toContain('after_move:filepath');
       expect(args).toContain('--quiet');
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('omits --max-filesize when no maxBytes is given', async () => {
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.mp4\n', ''));
-      await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-nomax-'));
+      const dest = path.join(dir, 'out.mp4');
+      fs.writeFileSync(dest, 'video');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
       const [, args] = execFile.mock.calls[0];
       expect(args).not.toContain('--max-filesize');
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('returns the requested path when yt-dlp confirms the file landed exactly there', async () => {
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.mp4\n', ''));
-      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
-      expect(result.filePath).toBe('/tmp/out.mp4');
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-ok-'));
+      const dest = path.join(dir, 'out.mp4');
+      fs.writeFileSync(dest, 'video');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
+      expect(result.filePath).toBe(dest);
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it('returns yt-dlp\'s actual final path when post-processing moved the file somewhere other than the requested -o value (the diagnosed real-world bug)', async () => {
-      // Documented yt-dlp behavior: merging/post-processing can land the
-      // real output at a different path than -o requested. This is
-      // exactly what --print after_move:filepath exists to reveal.
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '/tmp/out.fXXX.mp4\n', ''));
-      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
-      expect(result.filePath).toBe('/tmp/out.fXXX.mp4');
+    it('returns yt-dlp\'s actual final path when post-processing moved the file somewhere other than the requested -o value', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-moved-'));
+      const dest = path.join(dir, 'out.mp4');
+      const actual = path.join(dir, 'out.fXXX.mp4');
+      fs.writeFileSync(actual, 'video');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${actual}\n`, ''));
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
+      expect(result.filePath).toBe(actual);
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it('ignores blank lines and returns the last non-empty line as the real path', async () => {
-      mockExecFileOnce((bin, args, opts, cb) => cb(null, '\n\n/tmp/out.mp4\n\n', ''));
-      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {});
-      expect(result.filePath).toBe('/tmp/out.mp4');
+    it('recovers by scanning the output directory when the reported path does not exist on disk (the real-world failure)', async () => {
+      // The diagnosed production bug: yt-dlp exits 0, but neither the
+      // requested path nor the path it reported actually exists — the
+      // real file is there under a different name.
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-scan-'));
+      const dest = path.join(dir, 'import-abc123.mp4');
+      const real = path.join(dir, 'import-abc123.f137.mp4');
+      fs.writeFileSync(real, 'the actual video bytes');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${path.join(dir, 'bogus.mp4')}\n`, ''));
+
+      const result = await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
+
+      expect(result.filePath).toBe(real);
+      fs.rmSync(dir, { recursive: true, force: true });
     });
 
-    it('throws a retryable ProviderError if stdout is empty (output location could not be determined)', async () => {
+    it('ignores .part files when scanning, so an interrupted download is never mistaken for the result', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-part-'));
+      const dest = path.join(dir, 'import-abc.mp4');
+      fs.writeFileSync(path.join(dir, 'import-abc.mp4.part'), 'partial');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '\n', ''));
+
+      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {})).rejects.toMatchObject({
+        name: 'ProviderError',
+        reason: 'extraction_failed',
+      });
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('does not pick up a concurrent import\'s file when scanning', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-concurrent-'));
+      const dest = path.join(dir, 'import-mine.mp4');
+      fs.writeFileSync(path.join(dir, 'import-someone-else.mp4'), 'not mine');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '\n', ''));
+
+      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {})).rejects.toMatchObject({
+        name: 'ProviderError',
+      });
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('throws a retryable ProviderError when no output file can be found at all', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-none-'));
+      const dest = path.join(dir, 'out.mp4');
       mockExecFileOnce((bin, args, opts, cb) => cb(null, '', ''));
-      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', '/tmp/out.mp4', {})).rejects.toMatchObject({
+      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {})).rejects.toMatchObject({
         name: 'ProviderError',
         retryable: true,
         reason: 'extraction_failed',
       });
+      fs.rmSync(dir, { recursive: true, force: true });
     });
   });
 
