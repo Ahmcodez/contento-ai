@@ -86,6 +86,18 @@ describe('YtDlpRunner', () => {
       fs.rmSync(dir, { recursive: true, force: true });
     });
 
+    it('does NOT pass --no-warnings, unlike getMetadataJson — suppressing it hid a real ffmpeg-merge warning in production', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-nowarn-'));
+      const dest = path.join(dir, 'out.mp4');
+      fs.writeFileSync(dest, 'video');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, ''));
+      mockProbeOnce({ hasAudio: true });
+      await ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {});
+      const [, args] = execFile.mock.calls[0];
+      expect(args).not.toContain('--no-warnings');
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
     it('omits --max-filesize when no maxBytes is given', async () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-nomax-'));
       const dest = path.join(dir, 'out.mp4');
@@ -172,6 +184,25 @@ describe('YtDlpRunner', () => {
         reason: 'merge_failed',
         message: expect.stringContaining('audio track could not be merged'),
       });
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('logs the real yt-dlp stderr on a merge failure, so the actual cause (e.g. an ffmpeg warning) is visible without guessing', async () => {
+      const logger = require('../src/logger');
+      const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => {});
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytdlp-mergefail-log-'));
+      const dest = path.join(dir, 'import-abc.mp4');
+      fs.writeFileSync(dest, 'video-only output');
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, `${dest}\n`, 'WARNING: ffmpeg not found; the download will not be merged'));
+      mockProbeOnce({ hasAudio: false });
+
+      await expect(ytdlpRunner.downloadTo('https://youtube.com/watch?v=abc', dest, {})).rejects.toMatchObject({ reason: 'merge_failed' });
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ stderr: expect.stringContaining('ffmpeg not found') }),
+        expect.stringContaining('merge did not complete'),
+      );
+      errorSpy.mockRestore();
       fs.rmSync(dir, { recursive: true, force: true });
     });
 

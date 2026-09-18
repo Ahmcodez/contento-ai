@@ -136,7 +136,12 @@ async function getMetadataJson(url) {
 async function downloadTo(url, destPath, { maxBytes } = {}) {
   const args = [
     '--no-playlist',
-    '--no-warnings',
+    // Deliberately NOT --no-warnings here (unlike getMetadataJson):
+    // diagnosed a real case where the merge silently produced a
+    // video-only file with exit code 0 — yt-dlp's documented behavior
+    // when it can't invoke ffmpeg for merging is to warn and keep the
+    // unmerged stream rather than hard-fail, and --no-warnings was
+    // suppressing exactly the warning that would have explained it.
     '--quiet',
     '-f',
     'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/best[height<=1080]/best',
@@ -154,7 +159,7 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
   }
   args.push(url);
 
-  const { stdout } = await run(args, { timeoutMs: config.ytdlp.downloadTimeoutMs });
+  const { stdout, stderr } = await run(args, { timeoutMs: config.ytdlp.downloadTimeoutMs });
   const lines = stdout.split('\n').map((l) => l.trim()).filter(Boolean);
   const reportedPath = lines[lines.length - 1];
 
@@ -188,7 +193,7 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
 
   if (candidates.length === 0) {
     logger.error(
-      { reportedPath, requestedPath: destPath, outDir, stdout: stdout?.slice(0, 2000) },
+      { reportedPath, requestedPath: destPath, outDir, stdout: stdout?.slice(0, 2000), stderr: stderr?.slice(0, 2000) },
       'yt-dlp reported success but no output file could be found',
     );
     throw new ProviderError(
@@ -218,8 +223,21 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
   // merge failure (e.g. ffmpeg couldn't be found or invoked correctly
   // by yt-dlp at merge time), not a missing-file problem, so it gets
   // its own specific, actionable message rather than the generic one.
+  // stdout/stderr from the (exit-0) yt-dlp run are logged here in
+  // full — yt-dlp's documented behavior when ffmpeg can't be invoked
+  // for merging is to warn and silently keep the video-only stream
+  // rather than fail outright, so the real explanation is very likely
+  // sitting in one of these, not in a thrown error anywhere.
   logger.error(
-    { reportedPath, requestedPath: destPath, candidates, videoOnlyCandidate },
+    {
+      reportedPath,
+      requestedPath: destPath,
+      candidates,
+      videoOnlyCandidate,
+      ffmpegLocationUsed: config.ffmpeg.ffmpegPath,
+      stdout: stdout?.slice(0, 4000),
+      stderr: stderr?.slice(0, 4000),
+    },
     'yt-dlp produced a video-only file — the audio/video merge did not complete',
   );
   throw new ProviderError(
