@@ -144,7 +144,14 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
     // suppressing exactly the warning that would have explained it.
     '--quiet',
     '-f',
-    'bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[height<=1080][ext=mp4]/best[height<=1080]/best',
+    // Ordered to avoid needing ffmpeg at all whenever possible: most
+    // YouTube videos up to 1080p have a "progressive" format where
+    // YouTube itself already combined video+audio into one file — no
+    // merge step, no --ffmpeg-location dependency, nothing for a local
+    // ffmpeg/PATH/quoting issue to break. Only the fallback alternative
+    // (bv*+ba, separate streams) needs yt-dlp to invoke ffmpeg to merge
+    // them, and that's now a fallback rather than the default path.
+    'best[ext=mp4][vcodec!=none][acodec!=none][height<=1080]/bv*[height<=1080][ext=mp4]+ba[ext=m4a]/best[height<=1080]/best',
     '--merge-output-format',
     'mp4',
     '--ffmpeg-location',
