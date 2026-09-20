@@ -12,6 +12,7 @@
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
     "cleanup": "node scripts/cleanup.js",
+    "redis:rate": "node scripts/redisCommandRate.js",
     "test": "cross-env NODE_ENV=test jest --runInBand",
     "lint": "eslint src test"
   },
