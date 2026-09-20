@@ -23,6 +23,21 @@ async function findByIdScoped(id, workspaceIds) {
     .first();
 }
 
+/**
+ * Same ownership scoping as findByIdScoped, but resolves the caller's
+ * workspaces as a subquery so it's a single round trip. Used by the job
+ * status poll, which the frontend hits every few seconds while a job runs.
+ */
+async function findByIdForUser(id, userId) {
+  return db(TABLE)
+    .join('media_assets', 'media_assets.id', `${TABLE}.media_asset_id`)
+    .join('projects', 'projects.id', 'media_assets.project_id')
+    .whereIn('projects.workspace_id', db('workspace_members').select('workspace_id').where({ user_id: userId }))
+    .andWhere(`${TABLE}.id`, id)
+    .select(`${TABLE}.*`)
+    .first();
+}
+
 async function transitionState(id, { fromState, toState, progressPercent, errorMessage, failureStage, metadata }) {
   return db.transaction(async (trx) => {
     const updates = { state: toState, updated_at: trx.fn.now() };
@@ -63,4 +78,4 @@ async function countActiveForUser(userId) {
   return Number(result.count);
 }
 
-module.exports = { create, findByIdScoped, transitionState, listEvents, countActiveForUser };
+module.exports = { create, findByIdScoped, findByIdForUser, transitionState, listEvents, countActiveForUser };

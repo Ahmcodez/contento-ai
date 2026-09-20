@@ -30,8 +30,7 @@ const STATE_GROUPS = {
 const TERMINAL_STATES = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 
 async function getJob(userId, jobId) {
-  const workspaceIds = await workspaceService.getWorkspaceIdsForUser(userId);
-  const job = await processingJobRepository.findByIdScoped(jobId, workspaceIds);
+  const job = await processingJobRepository.findByIdForUser(jobId, userId);
   if (!job) throw AppError.notFound('Processing job not found');
   return {
     id: job.id,
