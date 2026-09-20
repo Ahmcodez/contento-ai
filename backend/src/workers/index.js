@@ -67,6 +67,16 @@ function startWorkers() {
     const worker = new Worker(queue, wrapWithErrorPersistence(queue, handler, idField), {
       connection: workerConnection,
       concurrency,
+      // Idle-cost tuning, verified against the installed BullMQ (5.81):
+      // an idle worker blocks for `drainDelay` seconds (uncapped when no
+      // delayed jobs exist), and new jobs / due retries wake it early, so
+      // raising this cuts idle Redis traffic without adding pickup or
+      // retry latency. stalledInterval only bounds how fast a crashed
+      // worker's job is recovered (kept at BullMQ's default of 30s, see
+      // config). lockDuration is left at BullMQ's default on purpose —
+      // that is the actual liveness guarantee.
+      drainDelay: config.queue.drainDelaySeconds,
+      stalledInterval: config.queue.stalledIntervalMs,
     });
     worker.duplicatedConnection = workerConnection;
 

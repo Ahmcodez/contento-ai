@@ -134,6 +134,21 @@ const envSchema = z.object({
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
+
+  // How long an *idle* worker blocks on Redis waiting for work before it
+  // wakes itself up and re-checks. New jobs and due retries wake a worker
+  // immediately regardless of this value (BullMQ pushes a marker; delayed
+  // jobs shorten the block to their due time), so this only controls the
+  // idle heartbeat — BullMQ's default of 5s costs ~26 Redis commands/min
+  // per queue forever, even with zero jobs. See docs/REDIS_OPTIMIZATION.md.
+  QUEUE_DRAIN_DELAY_SECONDS: z.coerce.number().int().min(1).max(120).default(30),
+  // How often each worker checks its queue for jobs whose owning worker
+  // died (lock expired). Measured against BullMQ 5.81 with a SIGKILLed
+  // worker: 30s -> orphaned job recovered in ~90s, 60s -> ~120s. Left at
+  // BullMQ's own default on purpose: raising it saves only ~10 idle
+  // commands/min for the whole worker fleet, which is not worth slowing
+  // crash recovery. Must exceed BullMQ's lock renew time (15s).
+  QUEUE_STALLED_INTERVAL_MS: z.coerce.number().int().min(15000).max(300000).default(30000),
 });
 
 /**
@@ -270,6 +285,8 @@ function loadConfig() {
     queue: {
       concurrencyDefault: env.QUEUE_CONCURRENCY_DEFAULT,
       concurrencyTranscription: env.QUEUE_CONCURRENCY_TRANSCRIPTION,
+      drainDelaySeconds: env.QUEUE_DRAIN_DELAY_SECONDS,
+      stalledIntervalMs: env.QUEUE_STALLED_INTERVAL_MS,
     },
   };
 }
