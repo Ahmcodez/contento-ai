@@ -7,9 +7,11 @@ const usageService = require('./usage.service');
  * from the usage_records ledger (docs/COST.md §3) — never a separately
  * maintained counter, so this can never drift from what actually happened.
  */
-async function getUsageSummary(userId) {
-  const user = await db('users').where({ id: userId }).first();
-  const quota = await db('quotas').where({ plan: user.plan }).first();
+async function getUsageSummary(userId, knownPlan) {
+  // Callers behind requireAuth already have the plan on req.user; only
+  // fall back to reading it when it isn't supplied.
+  const plan = knownPlan || (await db('users').where({ id: userId }).first('plan')).plan;
+  const quota = await db('quotas').where({ plan }).first();
 
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = `${today.slice(0, 7)}-01`;
@@ -30,7 +32,7 @@ async function getUsageSummary(userId) {
   ]);
 
   return {
-    plan: user.plan,
+    plan,
     quota: {
       maxUploadDurationSeconds: quota.max_upload_duration_seconds,
       maxUploadSizeMb: quota.max_upload_size_mb,

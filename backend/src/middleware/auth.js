@@ -18,12 +18,12 @@ async function requireAuth(req, res, next) {
       throw AppError.unauthorized('Invalid or expired access token', 'INVALID_TOKEN');
     }
 
-    const user = await userRepository.findById(payload.sub);
+    const user = await userRepository.findAuthById(payload.sub);
     if (!user) {
       throw AppError.unauthorized('User no longer exists', 'INVALID_TOKEN');
     }
 
-    req.user = { id: user.id, email: user.email, plan: user.plan };
+    req.user = { id: user.id, email: user.email, name: user.name, plan: user.plan };
     // Binds userId onto this request's child logger (pino-http gives
     // every request its own req.log) so every subsequent log line for
     // this request — including ones from deep inside a service — carries

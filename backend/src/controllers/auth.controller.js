@@ -1,6 +1,5 @@
 const authService = require('../services/auth.service');
 const asyncHandler = require('../utils/asyncHandler');
-const userRepository = require('../repositories/user.repository');
 
 const REFRESH_COOKIE = 'refreshToken';
 const COOKIE_OPTIONS = {
@@ -39,8 +38,10 @@ const logout = asyncHandler(async (req, res) => {
 });
 
 const me = asyncHandler(async (req, res) => {
-  const user = await userRepository.findById(req.user.id);
-  res.status(200).json({ user: { id: user.id, email: user.email, name: user.name, plan: user.plan } });
+  // requireAuth already loaded this user (and rejected deleted ones) on
+  // this same request — re-reading it here was a duplicate query.
+  const { id, email, name, plan } = req.user;
+  res.status(200).json({ user: { id, email, name, plan } });
 });
 
 module.exports = { register, login, refresh, logout, me };
