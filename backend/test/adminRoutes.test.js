@@ -44,7 +44,7 @@ describe('admin routes (queue observability)', () => {
     // eslint-disable-next-line global-require
     const { enqueueVideoValidate } = require('../src/queue/producers');
     // eslint-disable-next-line global-require
-    const { QUEUE_NAMES, getQueue, closeAllQueues } = require('../src/queue/queues');
+    const { PHYSICAL_QUEUES, QUEUE_NAMES, getQueue, closeAllQueues } = require('../src/queue/queues');
 
     await getQueue(QUEUE_NAMES.VIDEO_VALIDATE).drain();
     await enqueueVideoValidate({ processingJobId: 'admin-test-job', mediaAssetId: 'admin-test-asset' });
@@ -53,10 +53,16 @@ describe('admin routes (queue observability)', () => {
       const res = await request(app).get('/api/v1/admin/queues').set('X-Admin-Key', 'supersecret');
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
-      expect(res.body.data.length).toBe(Object.values(QUEUE_NAMES).length);
+      // One entry per PHYSICAL queue (stages share queues now).
+      expect(res.body.data.map((s) => s.queue).sort()).toEqual(Object.values(PHYSICAL_QUEUES).sort());
 
-      const videoValidateSummary = res.body.data.find((s) => s.queue === QUEUE_NAMES.VIDEO_VALIDATE);
-      expect(videoValidateSummary.counts.waiting).toBeGreaterThanOrEqual(1);
+      // video-validate now lives on pipeline-light: exact totals there, plus
+      // a per-stage breakdown so "which stage is backed up" is still answerable.
+      const light = res.body.data.find((s) => s.queue === PHYSICAL_QUEUES.LIGHT);
+      expect(light.counts.waiting).toBeGreaterThanOrEqual(1);
+      expect(light.stagesCarried).toEqual(expect.arrayContaining([QUEUE_NAMES.VIDEO_VALIDATE]));
+      expect(light.stages['video.validate'].waiting).toBeGreaterThanOrEqual(1);
+      expect(light.stagesTruncated).toBe(false);
     } finally {
       await closeAllQueues();
     }

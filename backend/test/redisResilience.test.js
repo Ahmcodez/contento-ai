@@ -30,8 +30,11 @@ describe('BullMQ connection-per-consumer (not one shared socket across every que
   });
 
   it('gives each Queue its own duplicated connection, not the single shared base connection', () => {
+    // Two stages on DIFFERENT physical queues (validate is on pipeline-light,
+    // render has its own queue) — stages that share a physical queue share
+    // one Queue and one connection by design (covered in queueConsolidation.test.js).
     const queueA = getQueue(QUEUE_NAMES.VIDEO_VALIDATE);
-    const queueB = getQueue(QUEUE_NAMES.AUDIO_EXTRACT);
+    const queueB = getQueue(QUEUE_NAMES.CLIP_RENDER);
 
     // Neither queue uses the raw base connection directly...
     expect(queueA.opts.connection).not.toBe(connection);
