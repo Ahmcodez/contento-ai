@@ -9,10 +9,65 @@ const QUEUE_NAMES = {
   TRANSCRIPTION_PROCESS: 'transcription-process',
   CONTENT_ANALYZE: 'content-analyze',
   CLIPS_DETECT: 'clips-detect',
-  CLIPS_SCORE: 'clips-score',
   CLIP_RENDER: 'clip-render',
   CONTENT_GENERATE: 'content-generate',
   JOB_FINALIZE: 'job-finalize',
+};
+
+/**
+ * QUEUE_NAMES are *logical stages*: they identify a pipeline stage in
+ * logs, metrics, retry policy and the durable `failure_stage` column, and
+ * they are what every producer/processor passes to getQueue(). They are
+ * NOT one-to-one with Redis queues any more.
+ *
+ * PHYSICAL_QUEUES are the real BullMQ queues (each = one Worker = one
+ * idle polling loop, ~30 Redis commands/min forever). Stages share a
+ * physical queue only when their workloads are compatible; see
+ * docs/QUEUE.md §1 for the audit behind this grouping:
+ *
+ *  - LIGHT: ms-to-seconds jobs (ffprobe, audio extract, DB finalize, URL
+ *    metadata) — head-of-line blocking and per-stage caps are moot.
+ *  - AI: network-bound Gemini calls with identical retry policy that draw
+ *    on one shared provider quota, so one shared limit governs them better
+ *    than three separate ones.
+ *  - DOWNLOAD / TRANSCRIPTION / RENDER: stay alone. Minutes-long, resource-
+ *    heavy (disk+untrusted network / RAM+CPU / CPU), and each must be
+ *    independently scalable and isolated.
+ */
+const PHYSICAL_QUEUES = {
+  LIGHT: 'pipeline-light',
+  AI: 'ai-process',
+  DOWNLOAD: 'url-import-download',
+  TRANSCRIPTION: 'transcription-process',
+  RENDER: 'clip-render',
+};
+
+const STAGE_TO_QUEUE = {
+  [QUEUE_NAMES.URL_IMPORT_RESOLVE]: PHYSICAL_QUEUES.LIGHT,
+  [QUEUE_NAMES.VIDEO_VALIDATE]: PHYSICAL_QUEUES.LIGHT,
+  [QUEUE_NAMES.AUDIO_EXTRACT]: PHYSICAL_QUEUES.LIGHT,
+  [QUEUE_NAMES.JOB_FINALIZE]: PHYSICAL_QUEUES.LIGHT,
+  [QUEUE_NAMES.CONTENT_ANALYZE]: PHYSICAL_QUEUES.AI,
+  [QUEUE_NAMES.CLIPS_DETECT]: PHYSICAL_QUEUES.AI,
+  [QUEUE_NAMES.CONTENT_GENERATE]: PHYSICAL_QUEUES.AI,
+  [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: PHYSICAL_QUEUES.DOWNLOAD,
+  [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: PHYSICAL_QUEUES.TRANSCRIPTION,
+  [QUEUE_NAMES.CLIP_RENDER]: PHYSICAL_QUEUES.RENDER,
+};
+
+/**
+ * Pre-consolidation queue names whose contents must be migrated into
+ * their new physical queue (see src/queue/legacyMigration.js). The three
+ * standalone queues kept their names, so they need no migration.
+ */
+const LEGACY_QUEUE_TO_STAGE = {
+  'url-import-resolve': QUEUE_NAMES.URL_IMPORT_RESOLVE,
+  'video-validate': QUEUE_NAMES.VIDEO_VALIDATE,
+  'audio-extract': QUEUE_NAMES.AUDIO_EXTRACT,
+  'job-finalize': QUEUE_NAMES.JOB_FINALIZE,
+  'content-analyze': QUEUE_NAMES.CONTENT_ANALYZE,
+  'clips-detect': QUEUE_NAMES.CLIPS_DETECT,
+  'content-generate': QUEUE_NAMES.CONTENT_GENERATE,
 };
 
 const RETRY_CONFIG = {
@@ -31,7 +86,6 @@ const RETRY_CONFIG = {
   [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: { attempts: 4, backoff: { type: 'exponential', delay: 5000 } },
   [QUEUE_NAMES.CONTENT_ANALYZE]: { attempts: 4, backoff: { type: 'exponential', delay: 3000 } },
   [QUEUE_NAMES.CLIPS_DETECT]: { attempts: 4, backoff: { type: 'exponential', delay: 3000 } },
-  [QUEUE_NAMES.CLIPS_SCORE]: { attempts: 2, backoff: { type: 'fixed', delay: 1000 } },
   [QUEUE_NAMES.CLIP_RENDER]: { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
   [QUEUE_NAMES.CONTENT_GENERATE]: { attempts: 4, backoff: { type: 'exponential', delay: 3000 } },
   [QUEUE_NAMES.JOB_FINALIZE]: { attempts: 3, backoff: { type: 'fixed', delay: 2000 } },
@@ -39,7 +93,19 @@ const RETRY_CONFIG = {
 
 const queues = {};
 
-function getQueue(name) {
+/**
+ * Returns the physical Queue that carries the given logical stage. Every
+ * producer keeps calling getQueue(QUEUE_NAMES.SOME_STAGE).add(jobName, ...)
+ * exactly as before; job names and per-job retry options are unchanged, so
+ * only the Redis key the job lands in differs.
+ */
+function getQueue(stage) {
+  const physical = STAGE_TO_QUEUE[stage];
+  if (!physical) throw new Error(`Unknown queue stage: ${stage}`);
+  return getPhysicalQueue(physical);
+}
+
+function getPhysicalQueue(name) {
   if (!queues[name]) {
     // Each Queue gets its own duplicated connection rather than sharing
     // the one base connection across every queue (+ a matching Worker
@@ -71,4 +137,13 @@ async function closeAllQueues() {
   );
 }
 
-module.exports = { QUEUE_NAMES, RETRY_CONFIG, getQueue, closeAllQueues };
+module.exports = {
+  QUEUE_NAMES,
+  PHYSICAL_QUEUES,
+  STAGE_TO_QUEUE,
+  LEGACY_QUEUE_TO_STAGE,
+  RETRY_CONFIG,
+  getQueue,
+  getPhysicalQueue,
+  closeAllQueues,
+};

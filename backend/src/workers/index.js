@@ -1,4 +1,4 @@
-const { Worker } = require('bullmq');
+const { Worker, UnrecoverableError } = require('bullmq');
 const connection = require('../redis/client');
 const config = require('../config');
 const logger = require('../logger');
@@ -6,7 +6,7 @@ const metrics = require('../metrics');
 const db = require('../db/client');
 const processingJobRepository = require('../repositories/processingJob.repository');
 const mediaImportRepository = require('../repositories/mediaImport.repository');
-const { QUEUE_NAMES } = require('../queue/queues');
+const { QUEUE_NAMES, PHYSICAL_QUEUES, STAGE_TO_QUEUE } = require('../queue/queues');
 
 const processUrlImportResolve = require('./processors/urlImportResolve.processor');
 const processUrlImportDownload = require('./processors/urlImportDownload.processor');
@@ -20,51 +20,85 @@ const processContentGenerate = require('./processors/contentGenerate.processor')
 const processJobFinalize = require('./processors/jobFinalize.processor');
 
 /**
- * All pipeline stages through job.finalize are registered, plus the two
- * URL-import stages that precede the pipeline proper (see
- * urlImportResolve/urlImportDownload.processor.js — they end by handing
- * off into video.validate exactly like an upload does). Written content
- * generation is chained after clip rendering rather than run as a true
- * parallel branch — see the comment in contentAnalyze.processor.js for
- * why.
+ * Every pipeline stage, keyed by logical stage (QUEUE_NAMES). `jobName` is
+ * the BullMQ job name producers already use for that stage — it is what a
+ * shared Worker dispatches on. `idField` selects which of the two payload
+ * shapes the stage uses ('processingJobId' for pipeline stages,
+ * 'mediaImportId' for the two URL-import stages that precede a MediaAsset).
+ *
+ * Written content generation is chained after clip rendering rather than
+ * run as a true parallel branch — see contentAnalyze.processor.js.
  */
-const STAGE_PROCESSORS = [
-  {
-    queue: QUEUE_NAMES.URL_IMPORT_RESOLVE,
-    handler: processUrlImportResolve,
-    concurrency: config.queue.concurrencyDefault,
-    idField: 'mediaImportId',
-  },
-  {
-    queue: QUEUE_NAMES.URL_IMPORT_DOWNLOAD,
-    handler: processUrlImportDownload,
-    concurrency: config.queue.concurrencyDefault,
-    idField: 'mediaImportId',
-  },
-  { queue: QUEUE_NAMES.VIDEO_VALIDATE, handler: processVideoValidate, concurrency: config.queue.concurrencyDefault },
-  { queue: QUEUE_NAMES.AUDIO_EXTRACT, handler: processAudioExtract, concurrency: config.queue.concurrencyDefault },
-  {
-    queue: QUEUE_NAMES.TRANSCRIPTION_PROCESS,
-    handler: processTranscription,
-    concurrency: config.queue.concurrencyTranscription,
-  },
-  { queue: QUEUE_NAMES.CONTENT_ANALYZE, handler: processContentAnalyze, concurrency: config.queue.concurrencyDefault },
-  { queue: QUEUE_NAMES.CLIPS_DETECT, handler: processClipsDetect, concurrency: config.queue.concurrencyDefault },
-  { queue: QUEUE_NAMES.CLIP_RENDER, handler: processClipRender, concurrency: config.queue.concurrencyDefault },
-  { queue: QUEUE_NAMES.CONTENT_GENERATE, handler: processContentGenerate, concurrency: config.queue.concurrencyDefault },
-  { queue: QUEUE_NAMES.JOB_FINALIZE, handler: processJobFinalize, concurrency: config.queue.concurrencyDefault },
-];
+const STAGES = {
+  [QUEUE_NAMES.URL_IMPORT_RESOLVE]: { jobName: 'url-import.resolve', handler: processUrlImportResolve, idField: 'mediaImportId' },
+  [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: { jobName: 'url-import.download', handler: processUrlImportDownload, idField: 'mediaImportId' },
+  [QUEUE_NAMES.VIDEO_VALIDATE]: { jobName: 'video.validate', handler: processVideoValidate },
+  [QUEUE_NAMES.AUDIO_EXTRACT]: { jobName: 'audio.extract', handler: processAudioExtract },
+  [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: { jobName: 'transcription.process', handler: processTranscription },
+  [QUEUE_NAMES.CONTENT_ANALYZE]: { jobName: 'content.analyze', handler: processContentAnalyze },
+  [QUEUE_NAMES.CLIPS_DETECT]: { jobName: 'clips.detect', handler: processClipsDetect },
+  [QUEUE_NAMES.CLIP_RENDER]: { jobName: 'clip.render', handler: processClipRender },
+  [QUEUE_NAMES.CONTENT_GENERATE]: { jobName: 'content.generate', handler: processContentGenerate },
+  [QUEUE_NAMES.JOB_FINALIZE]: { jobName: 'job.finalize', handler: processJobFinalize },
+};
+
+/**
+ * Slots per physical queue. Standalone queues keep their historical values;
+ * the two shared queues are sized in src/config (see the notes there).
+ */
+const QUEUE_CONCURRENCY = {
+  [PHYSICAL_QUEUES.LIGHT]: config.queue.concurrencyLight,
+  [PHYSICAL_QUEUES.AI]: config.queue.concurrencyAi,
+  [PHYSICAL_QUEUES.DOWNLOAD]: config.queue.concurrencyDefault,
+  [PHYSICAL_QUEUES.TRANSCRIPTION]: config.queue.concurrencyTranscription,
+  [PHYSICAL_QUEUES.RENDER]: config.queue.concurrencyDefault,
+};
+
+/** One entry per physical queue: which stages it carries + its concurrency. */
+function buildWorkerGroups() {
+  return Object.values(PHYSICAL_QUEUES).map((queue) => ({
+    queue,
+    concurrency: QUEUE_CONCURRENCY[queue],
+    stages: Object.entries(STAGE_TO_QUEUE)
+      .filter(([, physical]) => physical === queue)
+      .map(([stage]) => ({ stage, ...STAGES[stage] })),
+  }));
+}
+
+/**
+ * A shared Worker's processor: routes each job to its stage handler by
+ * job.name, wrapped with the same logging/metrics/error-persistence as
+ * before (keyed by the LOGICAL stage so logs, metrics and the durable
+ * failure_stage column are unchanged by consolidation).
+ *
+ * An unknown job name can only mean a producer/deploy mismatch. Retrying
+ * can never fix that, so it fails immediately (UnrecoverableError) and
+ * loudly rather than burning attempts.
+ */
+function buildDispatcher(queueName, stages) {
+  const byJobName = new Map(
+    stages.map(({ stage, jobName, handler, idField }) => [jobName, wrapWithErrorPersistence(stage, handler, idField)]),
+  );
+  return async (job) => {
+    const run = byJobName.get(job.name);
+    if (!run) {
+      logger.error({ queue: queueName, jobId: job.id, jobName: job.name }, 'no handler registered for job name');
+      throw new UnrecoverableError(`No handler for job "${job.name}" on queue "${queueName}"`);
+    }
+    return run(job);
+  };
+}
 
 function startWorkers() {
-  const workers = STAGE_PROCESSORS.map(({ queue, handler, concurrency, idField }) => {
+  const workers = buildWorkerGroups().map(({ queue, concurrency, stages }) => {
     // Each Worker gets its own duplicated connection for the same reason
     // each Queue does (see the comment in src/queue/queues.js) — a
-    // Worker holds a blocking command (BRPOPLPUSH) open on its
+    // Worker holds a blocking command (BZPOPMIN) open on its
     // connection for as long as it's waiting for a job, so sharing one
     // socket across this many of them is exactly the kind of contention
     // that produces spontaneous ECONNRESET under real load.
     const workerConnection = connection.duplicate();
-    const worker = new Worker(queue, wrapWithErrorPersistence(queue, handler, idField), {
+    const worker = new Worker(queue, buildDispatcher(queue, stages), {
       connection: workerConnection,
       concurrency,
       // Idle-cost tuning, verified against the installed BullMQ (5.81):
@@ -81,17 +115,20 @@ function startWorkers() {
     worker.duplicatedConnection = workerConnection;
 
     worker.on('completed', (job) => {
-      logger.info({ queue, jobId: job.id }, 'job completed');
+      logger.info({ queue, jobId: job.id, jobName: job.name }, 'job completed');
     });
 
     worker.on('failed', (job, err) => {
-      logger.error({ queue, jobId: job?.id, err: err.message, attemptsMade: job?.attemptsMade }, 'job failed');
+      logger.error(
+        { queue, jobId: job?.id, jobName: job?.name, err: err.message, attemptsMade: job?.attemptsMade },
+        'job failed',
+      );
     });
 
     return worker;
   });
 
-  logger.info(`Worker started, handling ${workers.length} queues`);
+  logger.info(`Worker started: ${workers.length} queues, ${Object.keys(STAGES).length} stages`);
   return workers;
 }
 
@@ -196,4 +233,4 @@ function wrapWithErrorPersistence(queueName, handler, idField = 'processingJobId
 // retry-exhaustion / terminal-failure behavior can be tested directly
 // against fake BullMQ job objects, rather than only indirectly through a
 // full real Worker+Queue+backoff-timing integration test.
-module.exports = { startWorkers, stopWorkers, wrapWithErrorPersistence };
+module.exports = { startWorkers, stopWorkers, wrapWithErrorPersistence, buildDispatcher, buildWorkerGroups, STAGES };

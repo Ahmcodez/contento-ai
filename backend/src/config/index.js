@@ -134,6 +134,13 @@ const envSchema = z.object({
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
+  // Shared-queue concurrency (see PHYSICAL_QUEUES in src/queue/queues.js).
+  // LIGHT carries ms-to-seconds jobs (validate, audio extract, finalize, URL
+  // metadata); measured 62ms / 1.1s per 10-min video, so 4 slots is ample.
+  // AI carries the three Gemini stages; 6 = the old 3 queues x 2, i.e. the
+  // same worst-case simultaneous provider calls as before.
+  QUEUE_CONCURRENCY_LIGHT: z.coerce.number().int().positive().default(4),
+  QUEUE_CONCURRENCY_AI: z.coerce.number().int().positive().default(6),
 
   // How long an *idle* worker blocks on Redis waiting for work before it
   // wakes itself up and re-checks. New jobs and due retries wake a worker
@@ -285,6 +292,8 @@ function loadConfig() {
     queue: {
       concurrencyDefault: env.QUEUE_CONCURRENCY_DEFAULT,
       concurrencyTranscription: env.QUEUE_CONCURRENCY_TRANSCRIPTION,
+      concurrencyLight: env.QUEUE_CONCURRENCY_LIGHT,
+      concurrencyAi: env.QUEUE_CONCURRENCY_AI,
       drainDelaySeconds: env.QUEUE_DRAIN_DELAY_SECONDS,
       stalledIntervalMs: env.QUEUE_STALLED_INTERVAL_MS,
     },
