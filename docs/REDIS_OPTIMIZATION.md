@@ -65,13 +65,56 @@ The API process is idle at 0 commands/min (queues are created lazily).
 - Worker state-transition writes (4 round trips each): the durable state
   machine; proportional to real transitions, no N+1 found.
 
-## Remaining floor and the next lever
+## Queue consolidation (10 -> 5 workers)
 
-10 queues = 10 independent idle loops. At 30s that is ~60 client-issued/min
-(~86k/day). Going lower needs fewer loops: e.g. one `pipeline` queue with a
-single Worker dispatching on `job.name`. That changes per-stage concurrency
-(transcription is limited to 1 today), admin queue metrics, and in-flight job
-migration, so it is a design decision, not a tuning tweak.
+Each worker loop costs the same (6 client-issued + 24 Lua commands/min) whatever
+the queue does, so idle cost = number of workers. A workload audit (see
+`docs/QUEUE.md` §1) found that only compatible stages can share: light
+(validate/audio/finalize/url-resolve) and the three AI stages. Render,
+transcription and download stay isolated (72 s per 60 s clip, Whisper RAM/CPU,
+untrusted 15-minute downloads). One single queue was rejected: it would put
+seconds-long jobs behind minutes-long CPU jobs and remove per-resource scaling.
+
+| Metric (same harness) | 10 workers | 5 workers |
+|---|---|---|
+| Idle, client-issued / min | 60 | **30** |
+| Idle, total incl. Lua / min | 300 | **150** |
+| Redis connections | 23 | 13 |
+| Startup commands (12 s) | 212 | 107 |
+| Shutdown after SIGTERM | 0.1 s | 0.1 s |
+| vs. original code (before any tuning) | 260 / 1,100 | 30 / 150 (-88% / -86%) |
+
+Verified on the consolidated worker: full test suite; a real 45 s video through
+all 10 stages to `COMPLETED` in 43 s (2 clips rendered 1080x1920, 5 content
+pieces, 0 errors; test-only fake whisper CLI + fake AI provider, real FFmpeg);
+and a `SIGKILL` of the whole worker process group mid-`audio-extract` on the
+shared queue: a fresh worker resumed the job ~1 min later and it completed with
+0 errors.
+
+Known tradeoff: in a shared queue a burst of long jobs can delay a short one
+(bounded by the longest job in that group: ~20 s in light, ~1 min in AI).
+
+### Rolling out
+
+Jobs already sitting in the seven folded-away queues must be moved once:
+
+1. stop the OLD worker gracefully (SIGTERM; active jobs finish)
+2. `npm run queues:migrate -- --dry-run`, then `npm run queues:migrate`
+3. start the NEW worker
+4. optionally `npm run queues:migrate -- --obliterate` to delete the empty legacy keys
+
+The script refuses to run while an old worker is attached (or if that can't be
+verified, unless `--force`), copies before removing (a crash can duplicate, never
+lose; stage handlers are idempotent), and keeps each job's remaining retry budget
+and due time. Failed jobs stay put (the durable record is Postgres).
+`GET /admin/queues` now returns the 5 physical queues with exact counts plus a
+per-stage breakdown (bounded scan, flagged `stagesTruncated` past 200 per state).
+
+## Remaining floor
+
+30 client-issued/min (~43k/day) for 5 idle loops. Going lower would require
+merging isolated resource classes, which is not worth the risk. Managed-Redis
+free tiers may still be exceeded: check your provider's billing model.
 
 ## Re-measuring
 

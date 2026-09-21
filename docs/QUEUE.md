@@ -2,11 +2,35 @@
 
 ## 1. Queues and job types
 
-One BullMQ **queue per pipeline stage** (not one giant queue) — this gives
-independent concurrency control and independent observability per stage,
-which matters because stages have very different cost/latency profiles
-(FFmpeg work is CPU-bound and local; AI calls are I/O-bound and rate-
-limited by an external provider).
+Pipeline stages are **logical stages** (`QUEUE_NAMES`): they identify a stage
+in logs, metrics, retry policy and the durable `failure_stage` column. They are
+carried by **five physical BullMQ queues** (`PHYSICAL_QUEUES`), each with one
+Worker and therefore one idle polling loop (~30 Redis commands/min forever,
+regardless of what the queue does). Stages share a physical queue only when
+their workloads are compatible; the grouping below comes from a workload audit
+(measured durations on a 10-minute 720p video, 1 CPU):
+
+| Physical queue | Concurrency | Stages (job name) | Why grouped / kept alone |
+|---|---|---|---|
+| `pipeline-light` | 4 | `video.validate` (62 ms), `audio.extract` (1.1 s), `job.finalize` (ms), `url-import.resolve` (<=20 s) | ms-to-seconds jobs: head-of-line blocking and per-stage caps are moot |
+| `ai-process` | 6 | `content.analyze`, `clips.detect`, `content.generate` | network-bound Gemini calls, identical retry policy, one shared provider quota; 6 = old 3x2 so worst-case simultaneous calls is unchanged |
+| `url-import-download` | 2 | `url-import.download` | up to 15 min, disk + untrusted network; scaled/isolated separately |
+| `transcription-process` | 1 | `transcription.process` | CPU+RAM heavy (local Whisper), up to 10 min; will move to GPU/hosted |
+| `clip-render` | 2 | `clip.render` | 72 s per 60 s clip, CPU-saturating; needs its own hosts |
+
+Not merged, on purpose: AI with light (a Gemini brownout would starve local
+stages for a ~6 commands/min saving) and transcription with render (no way to
+enforce per-stage concurrency inside one worker). Retries are per-job options
+applied at `add()` from `RETRY_CONFIG[stage]`, so they are unaffected by
+sharing. `clips-score` was documented but never implemented (scoring runs inside
+`clips.detect`), so it is not a queue.
+
+A shared Worker dispatches on `job.name` (`buildDispatcher`); an unknown name
+fails immediately as `UnrecoverableError`. Sizing knobs: `QUEUE_CONCURRENCY_LIGHT`,
+`QUEUE_CONCURRENCY_AI`, `QUEUE_CONCURRENCY_TRANSCRIPTION`.
+
+Logical stages (the table below predates consolidation; its concurrency column is
+superseded by the one above):
 
 | Queue name          | Job name           | Triggered after state | Produces state    | Concurrency (dev default) |
 |----------------------|----------------------|--------------------------|----------------------|-----------------------------|
