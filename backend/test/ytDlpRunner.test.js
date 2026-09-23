@@ -5,6 +5,24 @@ const path = require('path');
 const { execFile } = require('child_process');
 const ytdlpRunner = require('../src/providers/YtDlpRunner');
 const { ProviderError } = require('../src/providers/URLProvider');
+const config = require('../src/config');
+const { _resetCacheForTests } = require('../src/providers/resolveFfmpegLocation');
+
+// downloadTo now resolves config.ffmpeg.ffmpegPath to an absolute path
+// before invoking yt-dlp (see resolveFfmpegLocation.js — yt-dlp's
+// --ffmpeg-location does a literal file-existence check, not a PATH
+// search, unlike this app's own direct ffmpeg calls). Pointing the config
+// at this test file's own (real, always-existing) absolute path makes
+// that resolution a no-op short-circuit, so it costs no extra mocked
+// execFile call in every test below, exactly as before this feature existed.
+const originalFfmpegPath = config.ffmpeg.ffmpegPath;
+beforeAll(() => {
+  config.ffmpeg.ffmpegPath = __filename;
+});
+afterAll(() => {
+  config.ffmpeg.ffmpegPath = originalFfmpegPath;
+  _resetCacheForTests();
+});
 
 function mockExecFileOnce(impl) {
   execFile.mockImplementationOnce((bin, args, opts, cb) => impl(bin, args, opts, cb));

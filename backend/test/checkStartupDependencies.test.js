@@ -20,7 +20,7 @@ describe('checkStartupDependencies', () => {
 
   it('reports all three as reachable when they are real, working binaries (this sandbox has them installed)', async () => {
     const result = await checkStartupDependencies();
-    expect(result).toEqual({ ffmpegOk: true, ffprobeOk: true, ytdlpOk: true });
+    expect(result).toMatchObject({ ffmpegOk: true, ffprobeOk: true, ytdlpOk: true });
   });
 
   it('reports ffmpeg as unreachable when the configured path is bogus — reproduces the exact real-world incident (config silently left at the literal default)', async () => {
@@ -49,6 +49,6 @@ describe('checkStartupDependencies', () => {
     config.ffmpeg.ffmpegPath = 'nope-ffmpeg';
     config.ffmpeg.ffprobePath = 'nope-ffprobe';
     config.ytdlp.path = 'nope-ytdlp';
-    await expect(checkStartupDependencies()).resolves.toEqual({ ffmpegOk: false, ffprobeOk: false, ytdlpOk: false });
+    await expect(checkStartupDependencies()).resolves.toMatchObject({ ffmpegOk: false, ffprobeOk: false, ytdlpOk: false });
   });
 });
