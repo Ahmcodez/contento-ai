@@ -5,6 +5,7 @@ const config = require('../config');
 const logger = require('../logger');
 const mediaProcessor = require('../media/MediaProcessor');
 const { ProviderError } = require('./URLProvider');
+const { resolveFfmpegLocationForYtDlp } = require('./resolveFfmpegLocation');
 
 /**
  * Isolated wrapper around the yt-dlp binary — the only place in this
@@ -134,6 +135,12 @@ async function getMetadataJson(url) {
  * `--print` line is reliably the only thing worth parsing from stdout.
  */
 async function downloadTo(url, destPath, { maxBytes } = {}) {
+  // yt-dlp's --ffmpeg-location does a literal file-existence check, not a
+  // PATH search — a bare "ffmpeg" that works fine for this app's own
+  // direct ffmpeg calls (PATH-resolved by the OS) makes yt-dlp silently
+  // skip merging instead. Resolve it to an absolute path first; see
+  // resolveFfmpegLocation.js for the full story.
+  const ffmpegLocation = await resolveFfmpegLocationForYtDlp();
   const args = [
     '--no-playlist',
     // Deliberately NOT --no-warnings here (unlike getMetadataJson):
@@ -155,7 +162,7 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
     '--merge-output-format',
     'mp4',
     '--ffmpeg-location',
-    config.ffmpeg.ffmpegPath,
+    ffmpegLocation,
     '-o',
     destPath,
     '--print',
@@ -241,7 +248,8 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
       requestedPath: destPath,
       candidates,
       videoOnlyCandidate,
-      ffmpegLocationUsed: config.ffmpeg.ffmpegPath,
+      ffmpegLocationUsed: ffmpegLocation,
+      ffmpegPathConfigured: config.ffmpeg.ffmpegPath,
       stdout: stdout?.slice(0, 4000),
       stderr: stderr?.slice(0, 4000),
     },
