@@ -75,6 +75,40 @@ describe('YtDlpRunner', () => {
       expect(args.filter((a) => a === maliciousUrl)).toHaveLength(1);
     });
 
+    it('invokes yt-dlp with --extractor-args to skip translated auto-captions, which is what caused a real 10MB+ payload', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '{}', ''));
+      await ytdlpRunner.getMetadataJson('https://youtube.com/watch?v=abc123');
+      const [, args] = execFile.mock.calls[0];
+      expect(args).toContain('--extractor-args');
+      expect(args).toContain('youtube:skip=translated_subs');
+    });
+
+    it('passes the configured metadata maxBuffer (not Node\'s 1MB default) to execFile', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(null, '{}', ''));
+      await ytdlpRunner.getMetadataJson('https://youtube.com/watch?v=abc123');
+      const [, , opts] = execFile.mock.calls[0];
+      expect(opts.maxBuffer).toBe(config.ytdlp.metadataMaxBufferBytes);
+      expect(opts.maxBuffer).toBeGreaterThan(1024 * 1024);
+    });
+
+    // Real production incident: a video with many YouTube auto-caption
+    // languages produced a -J payload that exceeded the stdout buffer.
+    // Node terminates the child process and reports this via err.message
+    // (not stderr, not err.killed/SIGTERM) — reproduced exactly as
+    // execFile actually reports it.
+    it('classifies a maxBuffer overflow as its own specific, non-retryable error (not the generic "unrecognized stderr" bucket)', async () => {
+      mockExecFileOnce((bin, args, opts, cb) => cb(
+        Object.assign(new Error(`${bin} stdout maxBuffer length exceeded`), { code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' }),
+        '',
+        '',
+      ));
+      await expect(ytdlpRunner.getMetadataJson('https://youtube.com/watch?v=abc123')).rejects.toMatchObject({
+        name: 'ProviderError',
+        retryable: false,
+        reason: 'metadata_too_large',
+      });
+    });
+
     it('throws a retryable ProviderError when yt-dlp returns unparseable output', async () => {
       mockExecFileOnce((bin, args, opts, cb) => cb(null, 'not json', ''));
       await expect(ytdlpRunner.getMetadataJson('https://youtube.com/watch?v=abc')).rejects.toMatchObject({
