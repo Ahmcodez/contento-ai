@@ -131,6 +131,14 @@ const envSchema = z.object({
   // ceiling is perfectly reasonable.
   YTDLP_METADATA_TIMEOUT_MS: z.coerce.number().int().positive().default(20 * 1000),
   YTDLP_DOWNLOAD_TIMEOUT_MS: z.coerce.number().int().positive().default(15 * 60 * 1000),
+  // Real production incident: a video with a large number of YouTube
+  // auto-generated caption languages produced a `-J` (metadata) JSON
+  // payload over 10MB, which exceeded Node's execFile stdout buffer and
+  // failed deterministically on every retry (same video, same output
+  // size, same limit — retrying never helps this specific error). This
+  // is a safety-net ceiling; the actual fix is trimming the payload at
+  // the source (see the extractor-args comment in getMetadataJson).
+  YTDLP_METADATA_MAX_BUFFER_MB: z.coerce.number().int().positive().default(50),
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
@@ -287,6 +295,7 @@ function loadConfig() {
       path: env.YTDLP_PATH,
       metadataTimeoutMs: env.YTDLP_METADATA_TIMEOUT_MS,
       downloadTimeoutMs: env.YTDLP_DOWNLOAD_TIMEOUT_MS,
+      metadataMaxBufferBytes: env.YTDLP_METADATA_MAX_BUFFER_MB * 1024 * 1024,
     },
 
     queue: {

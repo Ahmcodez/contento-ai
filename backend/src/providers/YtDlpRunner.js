@@ -85,6 +85,20 @@ function run(args, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
         if (err.killed || err.signal === 'SIGTERM') {
           return reject(new ProviderError('The request to the video source timed out.', { retryable: true, reason: 'timeout', statusCode: 422 }));
         }
+        // Real production incident: a video with an unusually large
+        // number of auto-caption languages produced a -J JSON payload
+        // that exceeded the stdout buffer. This is deterministic for a
+        // given video/buffer size — retrying the identical call changes
+        // nothing, which is exactly what made this look like a stuck
+        // "fails after multiple attempts" bug rather than a fixed limit.
+        if (err.message?.includes('maxBuffer')) {
+          return reject(
+            new ProviderError(
+              "This video's metadata is unusually large (often many auto-caption languages) and exceeded the size this app will buffer.",
+              { retryable: false, reason: 'metadata_too_large', statusCode: 422 },
+            ),
+          );
+        }
         return reject(classifyStderr(stderr || err.message));
       }
       return resolve({ stdout, stderr });
@@ -98,11 +112,20 @@ function run(args, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
  * into hundreds of videos, --no-warnings to keep stdout parseable,
  * --skip-download as a second belt-and-suspenders guarantee alongside
  * -J that this never touches the network for the media itself).
+ *
+ * --extractor-args youtube:skip=translated_subs drops YouTube's
+ * machine-translated auto-caption language variants from the JSON —
+ * this app transcribes locally (see transcription/WhisperLocalProvider.js)
+ * and never reads YouTube's captions, so they're pure payload weight.
+ * Diagnosed against a real failure: a video with many auto-caption
+ * languages produced a -J payload that exceeded the stdout buffer this
+ * app captures it into; trimming this at the source (plus the larger
+ * buffer ceiling below) is the actual fix, not just a bigger number.
  */
 async function getMetadataJson(url) {
   const { stdout } = await run(
-    ['-J', '--no-playlist', '--no-warnings', '--skip-download', url],
-    { timeoutMs: config.ytdlp.metadataTimeoutMs },
+    ['-J', '--no-playlist', '--no-warnings', '--skip-download', '--extractor-args', 'youtube:skip=translated_subs', url],
+    { timeoutMs: config.ytdlp.metadataTimeoutMs, maxBuffer: config.ytdlp.metadataMaxBufferBytes },
   );
   try {
     return JSON.parse(stdout);
