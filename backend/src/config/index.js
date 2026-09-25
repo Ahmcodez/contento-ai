@@ -56,7 +56,21 @@ const envSchema = z.object({
   // default, since "current" here has a short shelf life by design.
   GEMINI_MODEL: z.string().default('gemini-3.6-flash'),
 
-  TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'none']).default('none'),
+  TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'groq', 'none']).default('none'),
+  // Groq's Whisper endpoint is OpenAI-compatible: hosted transcription,
+  // paste-a-key setup, no server-side install (unlike whisper-local, which
+  // shells out to a binary that must actually be present on the machine).
+  // Cheapest available transcription as of this writing ($0.04/hr vs
+  // OpenAI's $0.36/hr) with a real daily free allowance (not a one-time
+  // credit) for the build/test phase — see docs/AI.md.
+  GROQ_API_KEY: z.string().default(''),
+  GROQ_TRANSCRIPTION_MODEL: z.string().default('whisper-large-v3-turbo'),
+  GROQ_TRANSCRIPTION_TIMEOUT_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
+  // Free tier hard-caps uploads at 25MB; paid tiers allow more. Kept
+  // below Groq's own limit so this app's own error fires (with a clear
+  // message) instead of a raw 413 from the API. Files above this are
+  // transcoded first — see GroqTranscriptionProvider.js.
+  GROQ_MAX_UPLOAD_MB: z.coerce.number().int().positive().default(24),
 
   STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
   STORAGE_LOCAL_PATH: z.string().default('./storage/uploads'),
@@ -141,6 +155,11 @@ const envSchema = z.object({
   YTDLP_METADATA_MAX_BUFFER_MB: z.coerce.number().int().positive().default(50),
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
+  // Default of 1 assumes local Whisper: CPU/RAM-bound, so parallel jobs
+  // fight over the same resources. Groq transcription is network-bound
+  // instead (the actual compute runs on Groq's hardware) — if
+  // TRANSCRIPTION_PROVIDER=groq, raising this is safe and recommended;
+  // Groq's own free-tier RPM limit (not this app) becomes the real cap.
   QUEUE_CONCURRENCY_TRANSCRIPTION: z.coerce.number().int().positive().default(1),
   // Shared-queue concurrency (see PHYSICAL_QUEUES in src/queue/queues.js).
   // LIGHT carries ms-to-seconds jobs (validate, audio extract, finalize, URL
@@ -236,6 +255,10 @@ function loadConfig() {
 
     transcription: {
       provider: env.TRANSCRIPTION_PROVIDER,
+      groqApiKey: env.GROQ_API_KEY,
+      groqModel: env.GROQ_TRANSCRIPTION_MODEL,
+      groqTimeoutMs: env.GROQ_TRANSCRIPTION_TIMEOUT_MS,
+      groqMaxUploadBytes: env.GROQ_MAX_UPLOAD_MB * 1024 * 1024,
     },
 
     storage: {
