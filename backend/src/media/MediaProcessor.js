@@ -192,4 +192,27 @@ async function validateOutput(outputPath) {
   return { sizeBytes: stat.size, durationSeconds: probeResult.durationSeconds };
 }
 
-module.exports = { probe, extractAudio, renderVerticalClip, generateThumbnail, validateOutput, MediaProcessorError };
+/**
+ * Transcodes audio to a compressed, mono format for uploading to a hosted
+ * transcription API. Exists specifically because MAX_VIDEO_DURATION_SECONDS
+ * allows up to an hour of source video, and extractAudio's output (16kHz
+ * mono 16-bit PCM WAV) is ~115MB for a full hour — well over Groq's 25MB
+ * free-tier limit and close to its 100MB paid-tier limit. Opus at 24kbps
+ * (a bitrate well above what's needed for speech intelligibility) gets a
+ * full hour down to roughly 11MB, comfortably inside even the free tier.
+ */
+async function compressAudioForUpload(inputPath, outputPath, { bitrateKbps = 24 } = {}) {
+  const args = ['-y', '-i', inputPath, '-vn', '-ac', '1', '-c:a', 'libopus', '-b:a', `${bitrateKbps}k`, outputPath];
+  await run(config.ffmpeg.ffmpegPath, args);
+  return outputPath;
+}
+
+module.exports = {
+  probe,
+  extractAudio,
+  compressAudioForUpload,
+  renderVerticalClip,
+  generateThumbnail,
+  validateOutput,
+  MediaProcessorError,
+};

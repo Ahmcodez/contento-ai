@@ -55,6 +55,39 @@ describe('MediaProcessor (real ffmpeg)', () => {
     });
   });
 
+  describe('compressAudioForUpload', () => {
+    it('produces a real, valid, smaller audio file than the raw extracted WAV', async () => {
+      const wavPath = path.join(workDir, 'audio.wav');
+      await mediaProcessor.extractAudio(FIXTURE, wavPath);
+      const wavSize = (await fs.stat(wavPath)).size;
+
+      const opusPath = path.join(workDir, 'audio.opus');
+      await mediaProcessor.compressAudioForUpload(wavPath, opusPath);
+
+      const opusStat = await fs.stat(opusPath);
+      expect(opusStat.size).toBeGreaterThan(0);
+      expect(opusStat.size).toBeLessThan(wavSize);
+
+      const probed = await mediaProcessor.probe(opusPath);
+      expect(probed.hasAudio).toBe(true);
+      expect(probed.durationSeconds).toBeCloseTo(4, 0);
+    });
+
+    it('respects a lower bitrate for even smaller output', async () => {
+      const wavPath = path.join(workDir, 'audio.wav');
+      await mediaProcessor.extractAudio(FIXTURE, wavPath);
+
+      const highPath = path.join(workDir, 'high.opus');
+      const lowPath = path.join(workDir, 'low.opus');
+      await mediaProcessor.compressAudioForUpload(wavPath, highPath, { bitrateKbps: 48 });
+      await mediaProcessor.compressAudioForUpload(wavPath, lowPath, { bitrateKbps: 12 });
+
+      const highSize = (await fs.stat(highPath)).size;
+      const lowSize = (await fs.stat(lowPath)).size;
+      expect(lowSize).toBeLessThan(highSize);
+    });
+  });
+
   describe('renderVerticalClip', () => {
     it('renders a 9:16 clip of the requested duration', async () => {
       const outputPath = path.join(workDir, 'clip.mp4');
