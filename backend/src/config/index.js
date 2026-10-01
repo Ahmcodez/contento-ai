@@ -107,6 +107,18 @@ const envSchema = z.object({
   MAX_AI_CALLS_PER_JOB: z.coerce.number().int().positive().default(20),
   MAX_GENERATED_CONTENT_TYPES: z.coerce.number().int().positive().default(5),
   AI_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
+  // Real incident: Gemini's free tier caps gemini-*-flash at 5 requests
+  // PER MINUTE, project-wide, across every stage that calls it. The
+  // ai-process queue's own concurrency (6, see QUEUE_CONCURRENCY_AI) was
+  // sized against the old 3-queues-x-2 layout, not against this hard
+  // external ceiling — so multiple jobs' analyze/detect/generate calls
+  // could fire in parallel and blow through the quota before any single
+  // call even got a chance to retry. This throttles how many AI calls
+  // this app STARTS per window, via BullMQ's own rate limiter (proactive
+  // throttling), instead of only reacting after Gemini rejects a call.
+  // Raise this once billing is enabled — paid tiers allow far more RPM.
+  QUEUE_AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+  QUEUE_AI_RATE_LIMIT_DURATION_MS: z.coerce.number().int().positive().default(60 * 1000),
 
   CLIP_MIN_DURATION_SECONDS: z.coerce.number().int().positive().default(15),
   CLIP_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(90),
@@ -165,7 +177,11 @@ const envSchema = z.object({
   // LIGHT carries ms-to-seconds jobs (validate, audio extract, finalize, URL
   // metadata); measured 62ms / 1.1s per 10-min video, so 4 slots is ample.
   // AI carries the three Gemini stages; 6 = the old 3 queues x 2, i.e. the
-  // same worst-case simultaneous provider calls as before.
+  // same worst-case simultaneous provider calls as before. Concurrency
+  // controls how many calls can be IN FLIGHT at once; QUEUE_AI_RATE_LIMIT_*
+  // below controls how many can be STARTED per minute — the one that
+  // actually matters against Gemini's free-tier 5 req/min quota. Both are
+  // needed: concurrency alone doesn't prevent a burst of starts.
   QUEUE_CONCURRENCY_LIGHT: z.coerce.number().int().positive().default(4),
   QUEUE_CONCURRENCY_AI: z.coerce.number().int().positive().default(6),
 
@@ -326,6 +342,8 @@ function loadConfig() {
       concurrencyTranscription: env.QUEUE_CONCURRENCY_TRANSCRIPTION,
       concurrencyLight: env.QUEUE_CONCURRENCY_LIGHT,
       concurrencyAi: env.QUEUE_CONCURRENCY_AI,
+      aiRateLimitMax: env.QUEUE_AI_RATE_LIMIT_MAX,
+      aiRateLimitDurationMs: env.QUEUE_AI_RATE_LIMIT_DURATION_MS,
       drainDelaySeconds: env.QUEUE_DRAIN_DELAY_SECONDS,
       stalledIntervalMs: env.QUEUE_STALLED_INTERVAL_MS,
     },

@@ -54,11 +54,24 @@ const QUEUE_CONCURRENCY = {
   [PHYSICAL_QUEUES.RENDER]: config.queue.concurrencyDefault,
 };
 
+/** Per-physical-queue BullMQ rate limiter (max jobs STARTED per window).
+ * Only ai-process has one today — see QUEUE_AI_RATE_LIMIT_MAX/DURATION_MS
+ * in config. This throttles proactively, before a call is even attempted,
+ * which is the right tool for a hard external quota (Gemini's free-tier
+ * 5 req/min) — unlike retry/backoff, which only reacts after a rejection.
+ * BullMQ delays affected jobs and does NOT count this against their
+ * retry attempts.
+ */
+const QUEUE_RATE_LIMITER = {
+  [PHYSICAL_QUEUES.AI]: { max: config.queue.aiRateLimitMax, duration: config.queue.aiRateLimitDurationMs },
+};
+
 /** One entry per physical queue: which stages it carries + its concurrency. */
 function buildWorkerGroups() {
   return Object.values(PHYSICAL_QUEUES).map((queue) => ({
     queue,
     concurrency: QUEUE_CONCURRENCY[queue],
+    limiter: QUEUE_RATE_LIMITER[queue],
     stages: Object.entries(STAGE_TO_QUEUE)
       .filter(([, physical]) => physical === queue)
       .map(([stage]) => ({ stage, ...STAGES[stage] })),
@@ -90,7 +103,7 @@ function buildDispatcher(queueName, stages) {
 }
 
 function startWorkers() {
-  const workers = buildWorkerGroups().map(({ queue, concurrency, stages }) => {
+  const workers = buildWorkerGroups().map(({ queue, concurrency, stages, limiter }) => {
     // Each Worker gets its own duplicated connection for the same reason
     // each Queue does (see the comment in src/queue/queues.js) — a
     // Worker holds a blocking command (BZPOPMIN) open on its
@@ -101,6 +114,7 @@ function startWorkers() {
     const worker = new Worker(queue, buildDispatcher(queue, stages), {
       connection: workerConnection,
       concurrency,
+      ...(limiter ? { limiter } : {}),
       // Idle-cost tuning, verified against the installed BullMQ (5.81):
       // an idle worker blocks for `drainDelay` seconds (uncapped when no
       // delayed jobs exist), and new jobs / due retries wake it early, so
