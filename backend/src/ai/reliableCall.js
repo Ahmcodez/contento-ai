@@ -9,6 +9,22 @@ function sleep(ms) {
 }
 
 /**
+ * When a provider tells us exactly how long to wait (Gemini's RetryInfo,
+ * see GeminiProvider.js's parseRetryDelayMs), honor that instead of the
+ * generic exponential backoff — retrying before a quota's own reset
+ * window just burns another attempt for nothing, which is exactly what
+ * caused a real cascading failure (5 req/min quota, 3 inner + up to 4
+ * outer retries, all firing within seconds of each other). Capped at 65s
+ * as a sane ceiling so a pathological value can't stall a worker forever.
+ */
+function backoffDelayMs(err, attempt) {
+  if (err instanceof AIProviderError && err.retryAfterMs) {
+    return Math.min(err.retryAfterMs, 65000);
+  }
+  return Math.min(500 * 2 ** (attempt - 1), 8000);
+}
+
+/**
  * Hard per-job ceiling on real AI calls (docs/COST.md §4 "never make
  * unlimited AI requests"). Checked against the usage ledger before every
  * call, not just at job start — so a job can't exceed the ceiling even
@@ -134,7 +150,11 @@ async function callStructured({
         throw err;
       }
 
-      await sleep(Math.min(500 * 2 ** (attempt - 1), 8000));
+      const delayMs = backoffDelayMs(err, attempt);
+      if (isProviderError && err.retryAfterMs) {
+        logger.info({ attempt, delayMs }, 'honoring provider-specified retry delay instead of generic backoff');
+      }
+      await sleep(delayMs);
     }
   }
 
@@ -168,7 +188,7 @@ async function callText({ provider, prompt, systemPrompt, maxTokens, userId, pro
       if (!retryable || attempt === maxAttempts) {
         throw err;
       }
-      await sleep(Math.min(500 * 2 ** (attempt - 1), 8000));
+      await sleep(backoffDelayMs(err, attempt));
     }
   }
 

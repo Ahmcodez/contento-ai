@@ -6,6 +6,26 @@ const config = require('../config');
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 /**
+ * Real incident: Gemini's 429 RESOURCE_EXHAUSTED body includes a
+ * google.rpc.RetryInfo detail with the exact wait time it wants
+ * (e.g. `"retryDelay": "44s"`) — retrying sooner than this is guaranteed
+ * to hit the same per-minute quota window again. Parses that out of the
+ * raw error body text; returns null (falls back to generic backoff) for
+ * any error shape without it, so this never throws on unexpected bodies.
+ */
+function parseRetryDelayMs(errorBodyText) {
+  try {
+    const parsed = JSON.parse(errorBodyText);
+    const details = parsed?.error?.details || [];
+    const retryInfo = details.find((d) => d['@type']?.includes('RetryInfo'));
+    const match = /^(\d+(?:\.\d+)?)s$/.exec(retryInfo?.retryDelay || '');
+    return match ? Math.ceil(parseFloat(match[1]) * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Models occasionally wrap JSON in a markdown code fence even when asked
  * for raw JSON. Stripping this is a mechanical, safe recovery step —
  * distinct from "guessing" at malformed content — before we give up and
@@ -65,6 +85,7 @@ class GeminiProvider extends AIProvider {
       throw new AIProviderError(`Gemini API error (${response.status}): ${text}`, {
         retryable,
         reason: response.status === 429 ? 'rate_limited' : 'provider_error',
+        retryAfterMs: parseRetryDelayMs(text),
       });
     }
 

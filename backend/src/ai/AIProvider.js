@@ -30,11 +30,16 @@ class AIProvider {
  * processors) never branch on a provider-specific error type.
  */
 class AIProviderError extends Error {
-  constructor(message, { retryable = true, reason = 'unknown' } = {}) {
+  constructor(message, { retryable = true, reason = 'unknown', retryAfterMs = null } = {}) {
     super(message);
     this.name = 'AIProviderError';
     this.retryable = retryable;
     this.reason = reason;
+    // Some providers (Gemini's RESOURCE_EXHAUSTED) tell us exactly how
+    // long to wait before retrying. When present, reliableCall.js honors
+    // this instead of its own generic backoff — retrying sooner than a
+    // quota's own reset window just burns another attempt for nothing.
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
