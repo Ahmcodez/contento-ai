@@ -150,6 +150,92 @@ describe('retry policy survives sharing a queue', () => {
   });
 });
 
+describe('AI queue rate limiter (real incident: Gemini free-tier 5 req/min quota)', () => {
+  it('the ai-process worker group declares a limiter; no other queue does', () => {
+    const byQueue = Object.fromEntries(buildWorkerGroups().map((g) => [g.queue, g.limiter]));
+    expect(byQueue[PHYSICAL_QUEUES.AI]).toEqual({
+      max: config.queue.aiRateLimitMax,
+      duration: config.queue.aiRateLimitDurationMs,
+    });
+    expect(byQueue[PHYSICAL_QUEUES.LIGHT]).toBeUndefined();
+    expect(byQueue[PHYSICAL_QUEUES.RENDER]).toBeUndefined();
+    expect(byQueue[PHYSICAL_QUEUES.TRANSCRIPTION]).toBeUndefined();
+    expect(byQueue[PHYSICAL_QUEUES.DOWNLOAD]).toBeUndefined();
+  });
+
+  it('defaults to Gemini free tier\'s exact limit: 5 per 60s', () => {
+    expect(config.queue.aiRateLimitMax).toBe(5);
+    expect(config.queue.aiRateLimitDurationMs).toBe(60000);
+  });
+
+  // Real BullMQ Worker + real Redis: proves the limiter actually throttles
+  // job STARTS, not just that the config object has the right shape.
+  it('a real Worker with limiter:{max:2,duration} never starts more than 2 jobs within one window, even with 6 jobs queued and concurrency 6', async () => {
+    const name = `test-ai-limiter-${Date.now()}`;
+    const q = new Queue(name, { connection: own() });
+    const startTimes = [];
+    const worker = new Worker(
+      name,
+      async () => {
+        startTimes.push(Date.now());
+      },
+      { connection: own(), concurrency: 6, limiter: { max: 2, duration: 1000 }, drainDelay: 30 },
+    );
+    try {
+      await worker.waitUntilReady();
+      const t0 = Date.now();
+      await Promise.all(Array.from({ length: 6 }, (_, i) => q.add('job', { i })));
+      await waitFor(async () => (await q.getJobCounts('completed')).completed === 6, { timeout: 15000 });
+
+      expect(startTimes).toHaveLength(6);
+      // group starts into 1-second buckets relative to t0; no bucket may
+      // exceed the configured max of 2, however many jobs were ready to run
+      const buckets = {};
+      for (const t of startTimes) {
+        const bucket = Math.floor((t - t0) / 1000);
+        buckets[bucket] = (buckets[bucket] || 0) + 1;
+      }
+      expect(Math.max(...Object.values(buckets))).toBeLessThanOrEqual(2);
+      // and it must have taken at least ~2 windows to drain 6 jobs at max 2/window
+      expect(startTimes[5] - startTimes[0]).toBeGreaterThanOrEqual(1900);
+    } finally {
+      await worker.close();
+      await worker.opts.connection.quit().catch(() => {});
+      await q.obliterate({ force: true });
+      await q.close();
+    }
+  }, 20000);
+
+  it('rate-limited jobs are delayed, not failed — they do not consume retry attempts', async () => {
+    const name = `test-ai-limiter-attempts-${Date.now()}`;
+    const q = new Queue(name, { connection: own() });
+    const attemptsSeen = [];
+    const worker = new Worker(
+      name,
+      async (job) => {
+        attemptsSeen.push(job.attemptsMade);
+      },
+      { connection: own(), concurrency: 3, limiter: { max: 1, duration: 500 }, drainDelay: 30 },
+    );
+    try {
+      await worker.waitUntilReady();
+      await Promise.all(Array.from({ length: 3 }, () => q.add('job', {}, { attempts: 1 })));
+      const done = await waitFor(async () => (await q.getJobCounts('completed')).completed === 3, { timeout: 10000 });
+      expect(done).toBe(true);
+      // every job completed on its first real attempt (attemptsMade starts
+      // at 0 when the handler runs) — the limiter delayed them, it never
+      // burned a retry the way a failure would
+      expect(attemptsSeen).toEqual([0, 0, 0]);
+      expect((await q.getJobCounts('failed')).failed).toBe(0);
+    } finally {
+      await worker.close();
+      await worker.opts.connection.quit().catch(() => {});
+      await q.obliterate({ force: true });
+      await q.close();
+    }
+  }, 15000);
+});
+
 describe('dispatcher', () => {
   it('routes by job name and records metrics/logs under the LOGICAL stage name', async () => {
     const seen = [];

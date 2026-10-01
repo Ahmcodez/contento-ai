@@ -114,3 +114,60 @@ describe('GeminiProvider structured output parsing', () => {
     await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ retryable: true, reason: 'network_error' });
   });
 });
+
+describe('GeminiProvider RetryInfo parsing (real incident: free-tier 5 req/min quota)', () => {
+  let provider;
+  let originalFetch;
+
+  // The exact shape Gemini returns for RESOURCE_EXHAUSTED, reproduced
+  // from a real worker log.
+  const quotaExceededBody = JSON.stringify({
+    error: {
+      code: 429,
+      message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 5',
+      status: 'RESOURCE_EXHAUSTED',
+      details: [
+        { '@type': 'type.googleapis.com/google.rpc.Help', links: [] },
+        {
+          '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+          violations: [{ quotaMetric: 'generate_content_free_tier_requests', quotaValue: '5' }],
+        },
+        { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '44s' },
+      ],
+    },
+  });
+
+  beforeEach(() => {
+    provider = new GeminiProvider('fake-key-for-tests');
+    originalFetch = global.fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('extracts retryAfterMs from a real RESOURCE_EXHAUSTED response body', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => quotaExceededBody });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({
+      retryable: true,
+      reason: 'rate_limited',
+      retryAfterMs: 44000,
+    });
+  });
+
+  it('handles fractional seconds', async () => {
+    const body = quotaExceededBody.replace('"44s"', '"1.5s"');
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => body });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ retryAfterMs: 1500 });
+  });
+
+  it('leaves retryAfterMs null when the body has no RetryInfo (e.g. a plain 500)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: async () => 'server error' });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ retryAfterMs: null });
+  });
+
+  it('never throws on a malformed or non-JSON error body', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => 'not json at all {{{' });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ retryable: true, retryAfterMs: null });
+  });
+});

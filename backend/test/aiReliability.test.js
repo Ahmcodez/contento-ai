@@ -174,3 +174,62 @@ describe('callText', () => {
     expect(provider.generateText).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('backoff honors a provider-specified retryAfterMs (real incident: Gemini 5 req/min quota)', () => {
+  let sleepSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Capture the requested delay without actually waiting it out (these
+    // delays run to 44s/65s — a real sleep would make the suite crawl).
+    sleepSpy = jest.spyOn(global, 'setTimeout').mockImplementation((fn) => {
+      fn();
+      return 0;
+    });
+  });
+
+  afterEach(() => {
+    sleepSpy.mockRestore();
+  });
+
+  it('waits the quota-specified 44s instead of the generic ~500ms first-retry backoff', async () => {
+    const provider = makeProvider([
+      new AIProviderError('quota exceeded', { retryable: true, reason: 'rate_limited', retryAfterMs: 44000 }),
+      { text: 'recovered', usage: {} },
+    ]);
+    await callText({ provider, prompt: 'p', maxAttempts: 3 });
+    const delaysUsed = sleepSpy.mock.calls.map(([, ms]) => ms);
+    expect(delaysUsed).toContain(44000);
+    expect(delaysUsed).not.toContain(500); // would have been the generic first-attempt backoff
+  });
+
+  it('caps an absurd retryAfterMs at 65s rather than stalling the worker indefinitely', async () => {
+    const provider = makeProvider([
+      new AIProviderError('quota exceeded', { retryable: true, reason: 'rate_limited', retryAfterMs: 10 * 60 * 1000 }),
+      { text: 'recovered', usage: {} },
+    ]);
+    await callText({ provider, prompt: 'p', maxAttempts: 3 });
+    const delaysUsed = sleepSpy.mock.calls.map(([, ms]) => ms);
+    expect(Math.max(...delaysUsed)).toBe(65000);
+  });
+
+  it('falls back to the generic exponential backoff when retryAfterMs is absent', async () => {
+    const provider = makeProvider([
+      new AIProviderError('transient', { retryable: true }),
+      { text: 'recovered', usage: {} },
+    ]);
+    await callText({ provider, prompt: 'p', maxAttempts: 3 });
+    const delaysUsed = sleepSpy.mock.calls.map(([, ms]) => ms);
+    expect(delaysUsed).toContain(500); // first attempt's generic backoff, unchanged
+  });
+
+  it('applies the same retryAfterMs handling to callStructured, not just callText', async () => {
+    const provider = makeProvider([
+      new AIProviderError('quota exceeded', { retryable: true, reason: 'rate_limited', retryAfterMs: 44000 }),
+      { data: { value: 1 }, usage: {} },
+    ]);
+    await callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, maxAttempts: 3 });
+    const delaysUsed = sleepSpy.mock.calls.map(([, ms]) => ms);
+    expect(delaysUsed).toContain(44000);
+  });
+});
