@@ -26,6 +26,30 @@ function parseRetryDelayMs(errorBodyText) {
 }
 
 /**
+ * Real incident: a RESOURCE_EXHAUSTED body can report either a per-MINUTE
+ * quota (waiting the given retryDelay genuinely helps — see
+ * parseRetryDelayMs) or a per-DAY quota (quotaId ends in "PerDay..."),
+ * where Gemini still includes a short retryDelay (e.g. 58s) that cannot
+ * possibly be correct — a daily cap doesn't reset in under a minute.
+ * Retrying a daily-quota failure just burns the remaining attempts on a
+ * guaranteed-identical rejection and usually surfaces a confusing,
+ * unrelated secondary error (a 503 "high demand") once attempts run out,
+ * masking the real cause. This is detected so the caller can fail fast
+ * with an honest, actionable message instead.
+ */
+function isDailyQuotaExceeded(errorBodyText) {
+  try {
+    const parsed = JSON.parse(errorBodyText);
+    const details = parsed?.error?.details || [];
+    return details.some((d) =>
+      (d['@type']?.includes('QuotaFailure') ? d.violations : []).some((v) => v.quotaId?.includes('PerDay')),
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Models occasionally wrap JSON in a markdown code fence even when asked
  * for raw JSON. Stripping this is a mechanical, safe recovery step —
  * distinct from "guessing" at malformed content — before we give up and
@@ -80,8 +104,14 @@ class GeminiProvider extends AIProvider {
     }
 
     if (!response.ok) {
-      const retryable = response.status === 429 || response.status >= 500;
       const text = await response.text().catch(() => '');
+      if (response.status === 429 && isDailyQuotaExceeded(text)) {
+        throw new AIProviderError(
+          "Gemini's free-tier daily request limit has been reached for this project. This resets after a day — try again later, or enable billing on your Google AI Studio / Cloud project to raise the limit.",
+          { retryable: false, reason: 'daily_quota_exceeded' },
+        );
+      }
+      const retryable = response.status === 429 || response.status >= 500;
       throw new AIProviderError(`Gemini API error (${response.status}): ${text}`, {
         retryable,
         reason: response.status === 429 ? 'rate_limited' : 'provider_error',
