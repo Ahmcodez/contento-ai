@@ -171,3 +171,80 @@ describe('GeminiProvider RetryInfo parsing (real incident: free-tier 5 req/min q
     await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ retryable: true, retryAfterMs: null });
   });
 });
+
+describe('GeminiProvider daily-quota detection (real incident: 20 req/day free tier)', () => {
+  let provider;
+  let originalFetch;
+
+  // The exact shape from a real worker log: a PerDay quotaId, with
+  // Gemini still (confusingly) including a short RetryInfo delay that
+  // cannot actually fix a daily cap.
+  const dailyQuotaBody = JSON.stringify({
+    error: {
+      code: 429,
+      message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 20',
+      status: 'RESOURCE_EXHAUSTED',
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+          violations: [
+            {
+              quotaMetric: 'generativelanguage.googleapis.com/generate_content_free_tier_requests',
+              quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier',
+              quotaValue: '20',
+            },
+          ],
+        },
+        { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '58s' },
+      ],
+    },
+  });
+
+  // The per-minute shape, kept passing here to prove the daily-quota
+  // detection didn't regress the earlier per-minute fix.
+  const perMinuteQuotaBody = JSON.stringify({
+    error: {
+      code: 429,
+      status: 'RESOURCE_EXHAUSTED',
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+          violations: [{ quotaId: 'GenerateRequestsPerMinutePerProjectPerModel-FreeTier', quotaValue: '5' }],
+        },
+        { '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '44s' },
+      ],
+    },
+  });
+
+  beforeEach(() => {
+    provider = new GeminiProvider('fake-key-for-tests');
+    originalFetch = global.fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('classifies a PerDay quota violation as non-retryable with an honest, actionable message', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => dailyQuotaBody });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({
+      retryable: false,
+      reason: 'daily_quota_exceeded',
+      message: expect.stringContaining('daily request limit'),
+    });
+  });
+
+  it('does NOT set retryAfterMs for a daily quota — a short delay cannot fix a daily cap', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => dailyQuotaBody });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ retryAfterMs: null });
+  });
+
+  it('a PerMinute quota violation is unaffected: still retryable with its retryAfterMs honored', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 429, text: async () => perMinuteQuotaBody });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({
+      retryable: true,
+      reason: 'rate_limited',
+      retryAfterMs: 44000,
+    });
+  });
+});
