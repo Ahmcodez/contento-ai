@@ -12,6 +12,13 @@ const FIXTURE = path.join(__dirname, 'fixtures', 'sample.mp4');
 // immediately with an honest message. This test proves the fix through
 // the REAL processor and REAL database, not just the provider in
 // isolation (test/geminiProvider.test.js already covers that).
+//
+// This mocks getAIProvider() directly rather than using a real
+// GeminiProvider, so it represents the state AFTER GeminiProvider's own
+// one-hop daily-quota fallback (see geminiProvider.test.js's "falls back
+// to GEMINI_FALLBACK_MODEL" suite) has already been exhausted — i.e. both
+// the primary and fallback models are out of daily quota. Even in that
+// case, the processor must still fail fast rather than retry.
 jest.mock('../src/ai', () => ({
   getAIProvider: () => global.__mockAIProvider,
 }));

@@ -248,3 +248,125 @@ describe('GeminiProvider daily-quota detection (real incident: 20 req/day free t
     });
   });
 });
+
+describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota failure', () => {
+  let originalFallbackModel;
+  let originalFetch;
+
+  const dailyQuotaBody = JSON.stringify({
+    error: {
+      code: 429,
+      status: 'RESOURCE_EXHAUSTED',
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.QuotaFailure',
+          violations: [{ quotaId: 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', quotaValue: '20' }],
+        },
+      ],
+    },
+  });
+
+  beforeEach(() => {
+    originalFallbackModel = config.ai.geminiFallbackModel;
+    originalFetch = global.fetch;
+  });
+
+  afterEach(() => {
+    config.ai.geminiFallbackModel = originalFallbackModel;
+    global.fetch = originalFetch;
+  });
+
+  function modelFromUrl(url) {
+    return url.match(/models\/([^:]+):/)[1];
+  }
+
+  it('retries the same request against the fallback model and returns its successful result', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    const calledModels = [];
+    global.fetch = jest.fn().mockImplementation(async (url) => {
+      calledModels.push(modelFromUrl(url));
+      if (modelFromUrl(url) === 'gemini-3.6-flash') {
+        return { ok: false, status: 429, text: async () => dailyQuotaBody };
+      }
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'fallback worked' }] } }], usageMetadata: {} }) };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    const result = await provider.generateText({ prompt: 'p' });
+
+    expect(result.text).toBe('fallback worked');
+    expect(calledModels).toEqual(['gemini-3.6-flash', 'gemini-3.6-flash-lite']);
+  });
+
+  it('is bounded to exactly one fallback hop: if the fallback model ALSO hits a daily quota, it fails (not an infinite retry loop)', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    let callCount = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      callCount += 1;
+      return { ok: false, status: 429, text: async () => dailyQuotaBody };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({
+      retryable: false,
+      reason: 'daily_quota_exceeded',
+    });
+    expect(callCount).toBe(2); // primary + exactly one fallback attempt, never more
+  });
+
+  it('is disabled when GEMINI_FALLBACK_MODEL is empty: fails on the primary model alone', async () => {
+    config.ai.geminiFallbackModel = null;
+    let callCount = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      callCount += 1;
+      return { ok: false, status: 429, text: async () => dailyQuotaBody };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ reason: 'daily_quota_exceeded' });
+    expect(callCount).toBe(1);
+  });
+
+  it('does not fall back for a non-daily-quota error (e.g. a 503), since fallback only targets this one failure mode', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    let callCount = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      callCount += 1;
+      return { ok: false, status: 503, text: async () => 'server error' };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ reason: 'provider_error' });
+    expect(callCount).toBe(1);
+  });
+
+  it('never falls back to itself when GEMINI_FALLBACK_MODEL equals the primary model', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash'; // same as the provider's model below
+    let callCount = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      callCount += 1;
+      return { ok: false, status: 429, text: async () => dailyQuotaBody };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests', { model: 'gemini-3.6-flash' });
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ reason: 'daily_quota_exceeded' });
+    expect(callCount).toBe(1);
+  });
+
+  it('also applies to generateStructuredOutput, not just generateText', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    global.fetch = jest.fn().mockImplementation(async (url) => {
+      if (modelFromUrl(url) === 'gemini-3.6-flash') {
+        return { ok: false, status: 429, text: async () => dailyQuotaBody };
+      }
+      return {
+        ok: true,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: '{"ok":true}' }] } }], usageMetadata: {} }),
+      };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    const { data } = await provider.generateStructuredOutput({ prompt: 'p', schema: { type: 'object' } });
+    expect(data).toEqual({ ok: true });
+  });
+});
