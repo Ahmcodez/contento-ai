@@ -327,17 +327,17 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota fa
     expect(callCount).toBe(1);
   });
 
-  it('does not fall back for a non-daily-quota error (e.g. a 503), since fallback only targets this one failure mode', async () => {
+  it('does not fall back for a malformed 503 body (can\'t confirm model-overload status, so no fallback) or for a plain network error', async () => {
     config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
     let callCount = 0;
     global.fetch = jest.fn().mockImplementation(async () => {
       callCount += 1;
-      return { ok: false, status: 503, text: async () => 'server error' };
+      return { ok: false, status: 503, text: async () => 'server error' }; // not valid JSON
     });
 
     const provider = new GeminiProvider('fake-key-for-tests');
     await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ reason: 'provider_error' });
-    expect(callCount).toBe(1);
+    expect(callCount).toBe(1); // see the separate describe block below for the real UNAVAILABLE-body 503 case
   });
 
   it('never falls back to itself when GEMINI_FALLBACK_MODEL equals the primary model', async () => {
@@ -368,5 +368,82 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota fa
     const provider = new GeminiProvider('fake-key-for-tests');
     const { data } = await provider.generateStructuredOutput({ prompt: 'p', schema: { type: 'object' } });
     expect(data).toEqual({ ok: true });
+  });
+});
+
+describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a model-overload 503 (real incident)', () => {
+  let originalFallbackModel;
+  let originalFetch;
+
+  // Exact shape from a real worker log: 503 UNAVAILABLE, "experiencing
+  // high demand" — Google's own capacity problem, not this project's
+  // quota, and distinct from the daily-quota 429 case above.
+  const overloadedBody = JSON.stringify({
+    error: {
+      code: 503,
+      message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.',
+      status: 'UNAVAILABLE',
+    },
+  });
+
+  beforeEach(() => {
+    originalFallbackModel = config.ai.geminiFallbackModel;
+    originalFetch = global.fetch;
+  });
+
+  afterEach(() => {
+    config.ai.geminiFallbackModel = originalFallbackModel;
+    global.fetch = originalFetch;
+  });
+
+  function modelFromUrl(url) {
+    return url.match(/models\/([^:]+):/)[1];
+  }
+
+  it('retries against the fallback model instead of only backing off and hammering the same overloaded model', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    const calledModels = [];
+    global.fetch = jest.fn().mockImplementation(async (url) => {
+      calledModels.push(modelFromUrl(url));
+      if (modelFromUrl(url) === 'gemini-3.6-flash') {
+        return { ok: false, status: 503, text: async () => overloadedBody };
+      }
+      return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'fallback succeeded' }] } }], usageMetadata: {} }) };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    const result = await provider.generateText({ prompt: 'p' });
+
+    expect(result.text).toBe('fallback succeeded');
+    expect(calledModels).toEqual(['gemini-3.6-flash', 'gemini-3.6-flash-lite']);
+  });
+
+  it('is bounded to exactly one fallback hop and stays retryable when BOTH models are overloaded (unlike daily quota, a 503 can genuinely be transient)', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    let callCount = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      callCount += 1;
+      return { ok: false, status: 503, text: async () => overloadedBody };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({
+      retryable: true,
+      reason: 'provider_error',
+    });
+    expect(callCount).toBe(2);
+  });
+
+  it('does not treat an ordinary 500 as "overloaded" — no fallback, since the status must specifically be UNAVAILABLE', async () => {
+    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    let callCount = 0;
+    global.fetch = jest.fn().mockImplementation(async () => {
+      callCount += 1;
+      return { ok: false, status: 500, text: async () => JSON.stringify({ error: { code: 500, status: 'INTERNAL' } }) };
+    });
+
+    const provider = new GeminiProvider('fake-key-for-tests');
+    await expect(provider.generateText({ prompt: 'p' })).rejects.toMatchObject({ reason: 'provider_error' });
+    expect(callCount).toBe(1);
   });
 });
