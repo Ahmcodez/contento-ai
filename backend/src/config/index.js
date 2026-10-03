@@ -55,6 +55,15 @@ const envSchema = z.object({
   // https://ai.google.dev/gemini-api/docs/changelog before updating this
   // default, since "current" here has a short shelf life by design.
   GEMINI_MODEL: z.string().default('gemini-3.6-flash'),
+  // Real incident: the free tier's daily quota for gemini-3.6-flash can be
+  // as low as 20 requests/day (varies per-project; Google only shows the
+  // real number at https://aistudio.google.com/rate-limit — community
+  // lists quoting a fixed number are often stale). When the primary model
+  // hits a DAILY quota specifically (not the per-minute one, which the
+  // rate limiter + retryAfterMs backoff already handle), GeminiProvider
+  // falls back to this model for that one call, once, rather than failing
+  // the whole job. Set to '' to disable fallback entirely.
+  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.6-flash-lite'),
 
   TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'groq', 'none']).default('none'),
   // Groq's Whisper endpoint is OpenAI-compatible: hosted transcription,
@@ -267,6 +276,7 @@ function loadConfig() {
       provider: env.AI_PROVIDER,
       geminiApiKey: env.GEMINI_API_KEY,
       geminiModel: env.GEMINI_MODEL,
+      geminiFallbackModel: env.GEMINI_FALLBACK_MODEL || null,
     },
 
     transcription: {
