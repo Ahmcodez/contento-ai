@@ -30,7 +30,7 @@ class AIProvider {
  * processors) never branch on a provider-specific error type.
  */
 class AIProviderError extends Error {
-  constructor(message, { retryable = true, reason = 'unknown', retryAfterMs = null } = {}) {
+  constructor(message, { retryable = true, reason = 'unknown', retryAfterMs = null, triggersModelFallback = false } = {}) {
     super(message);
     this.name = 'AIProviderError';
     this.retryable = retryable;
@@ -40,6 +40,11 @@ class AIProviderError extends Error {
     // this instead of its own generic backoff — retrying sooner than a
     // quota's own reset window just burns another attempt for nothing.
     this.retryAfterMs = retryAfterMs;
+    // Set by providers that support a same-call fallback to a sibling
+    // model (see GeminiProvider's GEMINI_FALLBACK_MODEL handling) for
+    // failures specific to one model (exhausted quota, that model
+    // overloaded) rather than the account/request in general.
+    this.triggersModelFallback = triggersModelFallback;
   }
 }
 

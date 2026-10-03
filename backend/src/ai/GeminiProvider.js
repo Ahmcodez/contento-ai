@@ -51,6 +51,28 @@ function isDailyQuotaExceeded(errorBodyText) {
 }
 
 /**
+ * Real incident, distinct from the daily-quota one above: Gemini can
+ * return a 503 with `"status": "UNAVAILABLE"` and a message like "This
+ * model is currently experiencing high demand" — the model itself is
+ * overloaded on Google's end, nothing to do with this project's quota.
+ * From this app's perspective this is the same practical situation as a
+ * daily-quota exhaustion (this specific model is unusable right now, but
+ * a sibling model likely isn't affected), so it's eligible for the same
+ * one-hop GEMINI_FALLBACK_MODEL retry in callGenerateContent. Kept
+ * retryable at the per-call level (unlike daily quota) since a transient
+ * overload can plausibly clear up on its own if fallback is disabled or
+ * also unavailable — this only adds a fallback attempt, it doesn't
+ * change the existing retry/backoff behavior for this error type.
+ */
+function isModelOverloaded(errorBodyText) {
+  try {
+    return JSON.parse(errorBodyText)?.error?.status === 'UNAVAILABLE';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Models occasionally wrap JSON in a markdown code fence even when asked
  * for raw JSON. Stripping this is a mechanical, safe recovery step —
  * distinct from "guessing" at malformed content — before we give up and
@@ -115,7 +137,7 @@ class GeminiProvider extends AIProvider {
       if (response.status === 429 && isDailyQuotaExceeded(text)) {
         throw new AIProviderError(
           `Gemini's free-tier daily request limit has been reached for ${model} on this project. This resets after a day — try again later, or enable billing on your Google AI Studio / Cloud project to raise the limit.`,
-          { retryable: false, reason: 'daily_quota_exceeded' },
+          { retryable: false, reason: 'daily_quota_exceeded', triggersModelFallback: true },
         );
       }
       const retryable = response.status === 429 || response.status >= 500;
@@ -123,6 +145,12 @@ class GeminiProvider extends AIProvider {
         retryable,
         reason: response.status === 429 ? 'rate_limited' : 'provider_error',
         retryAfterMs: parseRetryDelayMs(text),
+        // Drives callGenerateContent's one-hop model fallback below.
+        // Daily-quota errors set this via their own throw above (and are
+        // also non-retryable there); a 503 UNAVAILABLE sets it here while
+        // staying retryable, since it's a separate, narrower decision
+        // (try a sibling model) from "should BullMQ retry this at all".
+        triggersModelFallback: response.status === 503 && isModelOverloaded(text),
       });
     }
 
@@ -136,26 +164,34 @@ class GeminiProvider extends AIProvider {
   }
 
   /**
-   * Real incident: the primary model's free-tier daily quota (as low as
-   * 20 requests/day, varies per-project) ran out mid-testing, failing
-   * every job until the next day. When that specific failure happens —
-   * not the per-minute quota, which the AI queue's rate limiter and
-   * retryAfterMs backoff already handle — this transparently retries the
-   * SAME request once against GEMINI_FALLBACK_MODEL (Flash-Lite by
-   * default, with its own separate, much larger daily quota) instead of
-   * failing the job outright. Bounded to exactly one fallback hop: if the
-   * fallback call also fails, that error propagates as-is — this never
-   * chains into a second fallback.
+   * Two real incidents, same fix: (1) the primary model's free-tier daily
+   * quota (as low as 20 requests/day, varies per-project) ran out
+   * mid-testing, failing every job until the next day; (2) separately,
+   * gemini-3.6-flash returned a persistent 503 UNAVAILABLE ("experiencing
+   * high demand") across multiple job attempts — a capacity problem on
+   * Google's end, not this project's quota, so retrying the SAME model
+   * with backoff kept hitting the same wall. Both leave `this.model`
+   * unusable right now while a sibling model likely isn't affected, so
+   * both are marked `triggersModelFallback` by #requestOnce (see
+   * isDailyQuotaExceeded / isModelOverloaded above) and handled
+   * identically here: retry the SAME request once against
+   * GEMINI_FALLBACK_MODEL (Flash-Lite by default) instead of failing the
+   * job outright. The per-minute quota (429 rate_limited) deliberately
+   * does NOT trigger this — the AI queue's rate limiter and
+   * retryAfterMs backoff already handle that correctly by waiting, which
+   * genuinely resolves it, unlike these two failure modes. Bounded to
+   * exactly one fallback hop: if the fallback call also fails, that
+   * error propagates as-is — this never chains into a second fallback.
    */
   async callGenerateContent(contents, options = {}) {
     try {
       return await this.#requestOnce(this.model, contents, options);
     } catch (err) {
       const canFallBack = config.ai.geminiFallbackModel && config.ai.geminiFallbackModel !== this.model;
-      if (err instanceof AIProviderError && err.reason === 'daily_quota_exceeded' && canFallBack) {
+      if (err instanceof AIProviderError && err.triggersModelFallback && canFallBack) {
         logger.warn(
-          { primaryModel: this.model, fallbackModel: config.ai.geminiFallbackModel },
-          'primary model hit its daily quota; falling back to GEMINI_FALLBACK_MODEL for this call',
+          { primaryModel: this.model, fallbackModel: config.ai.geminiFallbackModel, reason: err.reason },
+          'primary model unusable right now (quota or overloaded); falling back to GEMINI_FALLBACK_MODEL for this call',
         );
         return this.#requestOnce(config.ai.geminiFallbackModel, contents, options);
       }
