@@ -2,6 +2,7 @@ const { AIProvider, AIProviderError } = require('./AIProvider');
 const { CONTENT_ANALYSIS_JSON_SCHEMA } = require('./schemas');
 const { UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT, delimitTranscript } = require('./promptSafety');
 const config = require('../config');
+const logger = require('../logger');
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -74,8 +75,14 @@ class GeminiProvider extends AIProvider {
     this.model = model;
   }
 
-  async callGenerateContent(contents, { systemPrompt, maxTokens, temperature, responseSchema } = {}) {
-    const url = `${GEMINI_API_BASE}/models/${this.model}:generateContent?key=${this.apiKey}`;
+  /**
+   * Issues one request against a specific model. Separated from
+   * callGenerateContent (which decides WHICH model(s) to try) purely so
+   * the daily-quota fallback below can call this twice with different
+   * models without duplicating the request/parsing logic.
+   */
+  async #requestOnce(model, contents, { systemPrompt, maxTokens, temperature, responseSchema } = {}) {
+    const url = `${GEMINI_API_BASE}/models/${model}:generateContent?key=${this.apiKey}`;
 
     const body = {
       contents: [{ role: 'user', parts: [{ text: contents }] }],
@@ -107,7 +114,7 @@ class GeminiProvider extends AIProvider {
       const text = await response.text().catch(() => '');
       if (response.status === 429 && isDailyQuotaExceeded(text)) {
         throw new AIProviderError(
-          "Gemini's free-tier daily request limit has been reached for this project. This resets after a day — try again later, or enable billing on your Google AI Studio / Cloud project to raise the limit.",
+          `Gemini's free-tier daily request limit has been reached for ${model} on this project. This resets after a day — try again later, or enable billing on your Google AI Studio / Cloud project to raise the limit.`,
           { retryable: false, reason: 'daily_quota_exceeded' },
         );
       }
@@ -126,6 +133,34 @@ class GeminiProvider extends AIProvider {
       outputTokens: json.usageMetadata?.candidatesTokenCount || 0,
     };
     return { text, usage };
+  }
+
+  /**
+   * Real incident: the primary model's free-tier daily quota (as low as
+   * 20 requests/day, varies per-project) ran out mid-testing, failing
+   * every job until the next day. When that specific failure happens —
+   * not the per-minute quota, which the AI queue's rate limiter and
+   * retryAfterMs backoff already handle — this transparently retries the
+   * SAME request once against GEMINI_FALLBACK_MODEL (Flash-Lite by
+   * default, with its own separate, much larger daily quota) instead of
+   * failing the job outright. Bounded to exactly one fallback hop: if the
+   * fallback call also fails, that error propagates as-is — this never
+   * chains into a second fallback.
+   */
+  async callGenerateContent(contents, options = {}) {
+    try {
+      return await this.#requestOnce(this.model, contents, options);
+    } catch (err) {
+      const canFallBack = config.ai.geminiFallbackModel && config.ai.geminiFallbackModel !== this.model;
+      if (err instanceof AIProviderError && err.reason === 'daily_quota_exceeded' && canFallBack) {
+        logger.warn(
+          { primaryModel: this.model, fallbackModel: config.ai.geminiFallbackModel },
+          'primary model hit its daily quota; falling back to GEMINI_FALLBACK_MODEL for this call',
+        );
+        return this.#requestOnce(config.ai.geminiFallbackModel, contents, options);
+      }
+      throw err;
+    }
   }
 
   async generateText({ prompt, systemPrompt, maxTokens, temperature }) {
