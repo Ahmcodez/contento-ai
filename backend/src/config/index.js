@@ -63,7 +63,7 @@ const envSchema = z.object({
   // rate limiter + retryAfterMs backoff already handle), GeminiProvider
   // falls back to this model for that one call, once, rather than failing
   // the whole job. Set to '' to disable fallback entirely.
-  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.6-flash-lite'),
+  GEMINI_FALLBACK_MODEL: z.string().default('gemini-3.5-flash-lite'),
 
   TRANSCRIPTION_PROVIDER: z.enum(['whisper-local', 'groq', 'none']).default('none'),
   // Groq's Whisper endpoint is OpenAI-compatible: hosted transcription,
