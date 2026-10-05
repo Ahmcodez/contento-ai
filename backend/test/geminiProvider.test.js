@@ -281,7 +281,7 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota fa
   }
 
   it('retries the same request against the fallback model and returns its successful result', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     const calledModels = [];
     global.fetch = jest.fn().mockImplementation(async (url) => {
       calledModels.push(modelFromUrl(url));
@@ -295,11 +295,11 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota fa
     const result = await provider.generateText({ prompt: 'p' });
 
     expect(result.text).toBe('fallback worked');
-    expect(calledModels).toEqual(['gemini-3.6-flash', 'gemini-3.6-flash-lite']);
+    expect(calledModels).toEqual(['gemini-3.6-flash', 'gemini-3.5-flash-lite']);
   });
 
   it('is bounded to exactly one fallback hop: if the fallback model ALSO hits a daily quota, it fails (not an infinite retry loop)', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     let callCount = 0;
     global.fetch = jest.fn().mockImplementation(async () => {
       callCount += 1;
@@ -328,7 +328,7 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota fa
   });
 
   it('does not fall back for a malformed 503 body (can\'t confirm model-overload status, so no fallback) or for a plain network error', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     let callCount = 0;
     global.fetch = jest.fn().mockImplementation(async () => {
       callCount += 1;
@@ -354,7 +354,7 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a daily-quota fa
   });
 
   it('also applies to generateStructuredOutput, not just generateText', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     global.fetch = jest.fn().mockImplementation(async (url) => {
       if (modelFromUrl(url) === 'gemini-3.6-flash') {
         return { ok: false, status: 429, text: async () => dailyQuotaBody };
@@ -401,7 +401,7 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a model-overload
   }
 
   it('retries against the fallback model instead of only backing off and hammering the same overloaded model', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     const calledModels = [];
     global.fetch = jest.fn().mockImplementation(async (url) => {
       calledModels.push(modelFromUrl(url));
@@ -415,11 +415,11 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a model-overload
     const result = await provider.generateText({ prompt: 'p' });
 
     expect(result.text).toBe('fallback succeeded');
-    expect(calledModels).toEqual(['gemini-3.6-flash', 'gemini-3.6-flash-lite']);
+    expect(calledModels).toEqual(['gemini-3.6-flash', 'gemini-3.5-flash-lite']);
   });
 
   it('is bounded to exactly one fallback hop and stays retryable when BOTH models are overloaded (unlike daily quota, a 503 can genuinely be transient)', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     let callCount = 0;
     global.fetch = jest.fn().mockImplementation(async () => {
       callCount += 1;
@@ -435,7 +435,7 @@ describe('GeminiProvider falls back to GEMINI_FALLBACK_MODEL on a model-overload
   });
 
   it('does not treat an ordinary 500 as "overloaded" — no fallback, since the status must specifically be UNAVAILABLE', async () => {
-    config.ai.geminiFallbackModel = 'gemini-3.6-flash-lite';
+    config.ai.geminiFallbackModel = 'gemini-3.5-flash-lite';
     let callCount = 0;
     global.fetch = jest.fn().mockImplementation(async () => {
       callCount += 1;
