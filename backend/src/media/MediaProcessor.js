@@ -122,6 +122,8 @@ async function renderVerticalClip(inputPath, outputPath, { startMs, endMs, subti
     '-t', durationSeconds,
     '-vf', videoFilter,
     '-c:v', 'libx264',
+    '-preset', config.ffmpeg.preset,
+    '-crf', String(config.ffmpeg.crf),
     '-c:a', 'aac',
     outputPath,
   ];
