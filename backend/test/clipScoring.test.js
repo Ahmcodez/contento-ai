@@ -44,6 +44,59 @@ describe('scoreClipCandidate', () => {
     expect(withHook.breakdown.hookPresence).toBeGreaterThan(withoutHook.breakdown.hookPresence);
   });
 
+  describe('hook quality (not just presence)', () => {
+    const base = { startMs: 0, endMs: 30000, text: 'Text.' };
+    const hookScore = (hook) => scoreClipCandidate({ ...base, hook }).breakdown.hookPresence;
+
+    it('scores 0 for a missing/empty hook', () => {
+      expect(hookScore('')).toBe(0);
+      expect(hookScore('   ')).toBe(0);
+      expect(hookScore(undefined)).toBe(0);
+    });
+
+    it('scores a question-style hook above baseline', () => {
+      expect(hookScore('Why does this always happen right before a launch?')).toBeGreaterThan(65);
+    });
+
+    it('scores a hook with a concrete number above baseline, digit or spelled out', () => {
+      expect(hookScore('3 things killed this project in one week.')).toBeGreaterThan(65);
+      expect(hookScore('Three things killed this project in one week.')).toBeGreaterThan(65);
+    });
+
+    it('scores a direct-address hook above baseline', () => {
+      expect(hookScore('If you have ever tried this and failed, here is why.')).toBeGreaterThan(65);
+    });
+
+    it('scores a surprise/contrast-framed hook above baseline', () => {
+      expect(hookScore('Most people get this backwards and it costs them years.')).toBeGreaterThan(65);
+    });
+
+    it('penalizes a generic throat-clearing opening below baseline', () => {
+      expect(hookScore('So anyway, today I want to talk about marketing.')).toBeLessThan(65);
+      expect(hookScore('Hi everyone, welcome back to the channel.')).toBeLessThan(65);
+      expect(hookScore('Okay so basically this is a thing.')).toBeLessThan(65);
+    });
+
+    it('penalizes a hook that is too short to be a real claim', () => {
+      expect(hookScore('Hooks.')).toBeLessThan(65);
+      expect(hookScore('Hi there')).toBeLessThan(65);
+    });
+
+    it('penalizes a hook that is too long to be punchy', () => {
+      expect(hookScore('word '.repeat(45).trim())).toBeLessThan(65);
+    });
+
+    it('stays within 0-100 for a hook with many strong signals stacked', () => {
+      const score = hookScore('Why do most people get this backwards? Here is why 3 things cost you years, and what you should do.');
+      expect(score).toBeGreaterThanOrEqual(0);
+      expect(score).toBeLessThanOrEqual(100);
+    });
+
+    it('a clean, well-formed hook with no special signal lands at the baseline, not penalized', () => {
+      expect(hookScore('This changed how I think about the whole process.')).toBe(65);
+    });
+  });
+
   it('produces a final score between 0 and 100', () => {
     const { finalScore } = scoreClipCandidate({ startMs: 0, endMs: 30000, text: 'Some reasonable text here.' });
     expect(finalScore).toBeGreaterThanOrEqual(0);

@@ -6,7 +6,26 @@ const clipCandidateRepository = require('../repositories/clipCandidate.repositor
 
 function buildPrompt(transcript, analysis) {
   const topicsLine = (analysis.topics || []).join(', ');
-  return `Given this video transcript and its analysis, identify 3-10 potential short-form clip moments. Each clip should: contain a complete idea, have a strong opening line, work without needing outside context, have a useful conclusion, and avoid starting or ending mid-sentence. Ideal duration is 15-90 seconds.\n\nKey topics: ${topicsLine}\nSummary: ${analysis.summary}\n\nFull transcript:\n${delimitTranscript(transcript.fullText)}`;
+  return `Given this video transcript and its analysis, identify 3-10 potential short-form clip moments optimized for retention on platforms like TikTok, Reels and Shorts, where a viewer decides whether to keep watching within the first 1-3 seconds.
+
+For each clip, choose a startMs/endMs span where the FIRST THING SAID is itself a hook — do not pick a span whose opening line is throat-clearing, a transition ("so anyway"), or a restatement of something said earlier. If the strongest hook line in a segment comes a few seconds after where the idea technically begins, move the clip's start to that line rather than including the lead-up.
+
+The "hook" field must be the literal opening words a viewer will hear, verbatim from the transcript — not a paraphrase or a title. A strong hook is usually one of:
+- a direct, specific claim that sounds surprising or counterintuitive ("Most people get this backwards")
+- a question the viewer wants answered ("Why does this always happen right before...")
+- a concrete number or stat stated up front ("Three things killed this project, and the first one isn't what you'd guess")
+- the consequence stated before the explanation ("This one mistake cost us six months")
+- direct address naming the viewer's situation ("If you've ever tried to do X and failed...")
+
+Avoid hooks that are generic scene-setting ("Today I want to talk about..."), that bury the interesting part after a throat-clear, or that only make sense with context the clip doesn't include.
+
+Each clip should also: contain one complete idea, work without needing outside context, end on a real conclusion rather than mid-sentence, and avoid starting or ending mid-sentence. Ideal duration is 15-90 seconds.
+
+Key topics: ${topicsLine}
+Summary: ${analysis.summary}
+
+Full transcript:
+${delimitTranscript(transcript.fullText)}`;
 }
 
 /**

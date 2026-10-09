@@ -56,7 +56,13 @@ const clipCandidatesSchema = z.object({
         startMs: z.number().nonnegative(),
         endMs: z.number().positive(),
         title: z.string().min(1).max(200),
-        hook: z.string().max(500).optional(),
+        // Required, not optional: the literal opening line a viewer hears in
+        // the first 1-3 seconds. Making this mandatory means a response
+        // without a real hook fails schema validation and retries (see
+        // reliableCall.js's JSON/schema-validation retry path) instead of
+        // silently shipping a clip with no hook — the schema enforces the
+        // product requirement, not just the prompt wording.
+        hook: z.string().min(10).max(500),
         summary: z.string().max(1000).optional(),
         reason: z.string().max(500).optional(),
         topic: z.string().max(200).optional(),
@@ -77,13 +83,13 @@ const CLIP_CANDIDATES_JSON_SCHEMA = {
           startMs: { type: 'number' },
           endMs: { type: 'number' },
           title: { type: 'string' },
-          hook: { type: 'string' },
+          hook: { type: 'string', description: 'The literal opening line, spoken in the first 1-3 seconds, that hooks the viewer.' },
           summary: { type: 'string' },
           reason: { type: 'string' },
           topic: { type: 'string' },
           estimatedQualityScore: { type: 'number' },
         },
-        required: ['startMs', 'endMs', 'title'],
+        required: ['startMs', 'endMs', 'title', 'hook'],
       },
     },
   },
