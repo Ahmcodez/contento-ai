@@ -1,4 +1,4 @@
-const { wrapCaptionText, buildCaptionCues, cuesToSrt, msToSrtTimestamp } = require('../src/media/CaptionGenerator');
+const { wrapCaptionText, buildCaptionCues, buildWordLevelCues, cuesToSrt, msToSrtTimestamp } = require('../src/media/CaptionGenerator');
 
 describe('CaptionGenerator', () => {
   describe('msToSrtTimestamp', () => {
@@ -68,6 +68,80 @@ describe('CaptionGenerator', () => {
       const cues = buildCaptionCues(segments, { startMs: 2000, endMs: 4000 });
       expect(cues[0].startMs).toBe(0); // clamped to range start
       expect(cues[0].endMs).toBe(1000);
+    });
+  });
+
+  describe('buildCaptionCues with word-level timestamps (real feature: short, precisely-timed caption chunks)', () => {
+    const words = (startMs, ...texts) => texts.map((word, i) => ({ word, startMs: startMs + i * 300, endMs: startMs + i * 300 + 250 }));
+
+    const wordSegments = [
+      {
+        startMs: 1000,
+        endMs: 3500,
+        text: 'hello world this is a test',
+        wordTimestamps: words(1000, 'hello', 'world', 'this', 'is', 'a', 'test'),
+      },
+    ];
+
+    it('groups words into chunks of at most maxWordsPerCue, not one cue per whole segment', () => {
+      const cues = buildCaptionCues(wordSegments, { startMs: 1000, endMs: 3500, style: { maxWordsPerCue: 2 } });
+      expect(cues).toHaveLength(3); // 6 words / 2 per cue
+      expect(cues[0].lines.join(' ')).toBe('hello world');
+      expect(cues[1].lines.join(' ')).toBe('this is');
+      expect(cues[2].lines.join(' ')).toBe('a test');
+    });
+
+    it('each cue is timed from its first word\'s real start to its last word\'s real end, not evenly divided', () => {
+      const cues = buildCaptionCues(wordSegments, { startMs: 1000, endMs: 3500, style: { maxWordsPerCue: 2 } });
+      // "hello" starts at 1000 (clip-relative 0), "world" ends at 1000+300+250=1550 (clip-relative 550)
+      expect(cues[0].startMs).toBe(0);
+      expect(cues[0].endMs).toBe(550);
+    });
+
+    it('defaults to config.captions.maxWordsPerCue when the style object has no override', () => {
+      const cues = buildCaptionCues(wordSegments, { startMs: 1000, endMs: 3500 }); // default style = config.captions (maxWordsPerCue: 4)
+      expect(cues).toHaveLength(2); // 6 words / 4 per cue = chunks of 4 and 2
+      expect(cues[0].lines.join(' ').split(' ')).toHaveLength(4);
+    });
+
+    it('pools words across multiple overlapping segments into one evenly-grouped stream, not one cue-set per segment', () => {
+      const segments = [
+        { startMs: 0, endMs: 1500, text: 'one two', wordTimestamps: [{ word: 'one', startMs: 0, endMs: 400 }, { word: 'two', startMs: 500, endMs: 900 }] },
+        { startMs: 1500, endMs: 3000, text: 'three', wordTimestamps: [{ word: 'three', startMs: 1500, endMs: 1900 }] },
+      ];
+      const cues = buildCaptionCues(segments, { startMs: 0, endMs: 3000, style: { maxWordsPerCue: 3 } });
+      expect(cues).toHaveLength(1);
+      expect(cues[0].lines.join(' ')).toBe('one two three'); // grouped across the segment boundary
+    });
+
+    it('clips words to the requested range and rebases timing to clip-relative zero', () => {
+      const cues = buildCaptionCues(wordSegments, { startMs: 1300, endMs: 2000, style: { maxWordsPerCue: 10 } });
+      const text = cues.map((c) => c.lines.join(' ')).join(' ');
+      expect(text).not.toContain('hello'); // word ends at 1250, before the 1300 range start
+      expect(cues[0].startMs).toBe(0); // clamped to range start, then rebased
+    });
+
+    it('falls back to one-cue-per-segment unchanged when wordTimestamps is absent (no regression for older transcripts)', () => {
+      const plainSegments = [{ startMs: 1000, endMs: 3000, text: 'hello world' }];
+      const cues = buildCaptionCues(plainSegments, { startMs: 1000, endMs: 3000 });
+      expect(cues).toHaveLength(1);
+      expect(cues[0].lines.join(' ')).toBe('hello world');
+    });
+
+    it('falls back when wordTimestamps is an empty array (present but empty)', () => {
+      const segments = [{ startMs: 1000, endMs: 3000, text: 'hello world', wordTimestamps: [] }];
+      const cues = buildCaptionCues(segments, { startMs: 1000, endMs: 3000 });
+      expect(cues).toHaveLength(1);
+      expect(cues[0].lines.join(' ')).toBe('hello world');
+    });
+  });
+
+  describe('buildWordLevelCues directly', () => {
+    it('drops a group that becomes empty after range clipping rather than emitting a zero-duration cue', () => {
+      const wordsList = [{ word: 'outside', startMs: 0, endMs: 100 }, { word: 'inside', startMs: 500, endMs: 900 }];
+      const cues = buildWordLevelCues(wordsList, { startMs: 400, endMs: 1000, maxWordsPerCue: 2, style: { maxCharsPerLine: 30, maxLines: 2 } });
+      expect(cues).toHaveLength(1);
+      expect(cues[0].lines.join(' ')).toBe('inside');
     });
   });
 
