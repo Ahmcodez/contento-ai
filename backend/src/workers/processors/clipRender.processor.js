@@ -57,6 +57,14 @@ async function processClipRender(job) {
     startMs: s.start_ms,
     endMs: s.end_ms,
     text: s.text,
+    // Real bug this fixes: this mapping silently dropped word-level
+    // timing before it ever reached buildCaptionCues, so captions always
+    // fell back to one-cue-per-whole-segment even once Groq/Whisper
+    // started producing real word timestamps (GroqTranscriptionProvider.js
+    // / WhisperLocalProvider.js) — caught by an actual end-to-end run
+    // whose SRT output showed one 11-second cue instead of short,
+    // word-grouped chunks.
+    wordTimestamps: s.word_timestamps,
   }));
 
   const clipCandidates = await db('clip_candidates').whereIn('id', clipCandidateIds);
