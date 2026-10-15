@@ -95,7 +95,13 @@ const envSchema = z.object({
   S3_FORCE_PATH_STYLE: z.coerce.boolean().default(false),
 
   MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(500),
-  MAX_VIDEO_DURATION_SECONDS: z.coerce.number().int().positive().default(3600),
+  // Default raised from 1 hour: a real podcast workload is routinely
+  // 2+ hours, and the pipeline has no other hard-coded assumption tied
+  // to 1 hour (transcription, clip detection and rendering all already
+  // process whatever duration comes through). FFMPEG_TIMEOUT_MS and
+  // YTDLP_DOWNLOAD_TIMEOUT_MS are the real ceilings on how long a single
+  // stage may run — raise those too if you regularly process longer audio.
+  MAX_VIDEO_DURATION_SECONDS: z.coerce.number().int().positive().default(4 * 3600),
   MAX_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(10),
   // Clips within one job render through a bounded-concurrency pool, not
   // fully sequentially: at up to 10 clips/video and ~36s/clip (see
@@ -146,6 +152,15 @@ const envSchema = z.object({
   CAPTION_MAX_CHARS_PER_LINE: z.coerce.number().int().positive().default(28),
   CAPTION_MAX_LINES: z.coerce.number().int().positive().default(2),
   CAPTION_SAFE_MARGIN_PERCENT: z.coerce.number().min(0).max(0.4).default(0.08),
+  // Used only when the transcript has word-level timestamps (Groq and
+  // WhisperLocalProvider both now request these — see
+  // GroqTranscriptionProvider.js / WhisperLocalProvider.js). Groups words
+  // into short, precisely-timed caption chunks instead of showing a whole
+  // sentence for several seconds — the standard short-form caption style.
+  // 4 is a reasonable default (roughly matches common 2-5 word captions);
+  // transcripts without word-level data keep the previous one-cue-per-
+  // segment behavior unchanged.
+  CAPTION_MAX_WORDS_PER_CUE: z.coerce.number().int().positive().default(4),
 
   FFMPEG_OUTPUT_MAX_SIZE_MB: z.coerce.number().int().positive().default(200),
   // Real measurement (10-minute 720p source, 60s clip, this app's real
@@ -347,6 +362,7 @@ function loadConfig() {
       maxCharsPerLine: env.CAPTION_MAX_CHARS_PER_LINE,
       maxLines: env.CAPTION_MAX_LINES,
       safeMarginPercent: env.CAPTION_SAFE_MARGIN_PERCENT,
+      maxWordsPerCue: env.CAPTION_MAX_WORDS_PER_CUE,
     },
 
     rateLimit: {
