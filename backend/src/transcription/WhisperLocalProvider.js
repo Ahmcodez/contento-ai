@@ -27,7 +27,11 @@ class WhisperLocalProvider extends TranscriptionProvider {
       await new Promise((resolve, reject) => {
         execFile(
           this.binaryName,
-          [audioFilePath, '--output_format', this.outputFormat, '--output_dir', outDir],
+          // --word_timestamps enables per-word timing (nested inside each
+          // segment's own `words` array in the output JSON) so captions can
+          // be grouped into short, precisely-timed chunks instead of one
+          // whole-sentence block per segment — see CaptionGenerator.js.
+          [audioFilePath, '--output_format', this.outputFormat, '--output_dir', outDir, '--word_timestamps', 'True'],
           { timeout: WHISPER_TIMEOUT_MS, maxBuffer: 20 * 1024 * 1024 },
           (err, out, errOut) => {
             if (err) {
@@ -63,6 +67,14 @@ class WhisperLocalProvider extends TranscriptionProvider {
       startMs: Math.round(s.start * 1000),
       endMs: Math.round(s.end * 1000),
       text: s.text.trim(),
+      // openai-whisper nests word timestamps inside each segment already
+      // (unlike Groq, which returns one flat top-level array — see
+      // GroqTranscriptionProvider.js's #normalize for that bucketing).
+      words: (s.words || []).map((w) => ({
+        word: w.word,
+        startMs: Math.round(w.start * 1000),
+        endMs: Math.round(w.end * 1000),
+      })),
     }));
 
     return {

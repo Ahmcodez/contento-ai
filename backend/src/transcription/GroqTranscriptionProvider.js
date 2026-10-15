@@ -83,6 +83,17 @@ class GroqTranscriptionProvider extends TranscriptionProvider {
     form.append('file', new Blob([buffer]), path.basename(uploadPath));
     form.append('model', this.model);
     form.append('response_format', 'verbose_json');
+    // Real feature this enables: word-level caption timing. Per Groq's own
+    // API reference, requesting 'word' costs no extra money (same $/hour
+    // pricing) — only somewhat more latency — and "segment" is requested
+    // explicitly alongside it even though it's the default, so the
+    // response shape doesn't silently depend on Groq's default changing.
+    // Without word timestamps, captions can only be shown as whole-sentence
+    // blocks for several seconds at a time (see CaptionGenerator.js), not
+    // the short, precisely-timed, word-grouped captions that are the norm
+    // for short-form video.
+    form.append('timestamp_granularities[]', 'segment');
+    form.append('timestamp_granularities[]', 'word');
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.transcription.groqTimeoutMs);
@@ -147,12 +158,23 @@ class GroqTranscriptionProvider extends TranscriptionProvider {
   }
 
   #normalize(raw) {
-    const segments = (raw.segments || []).map((s, i) => ({
-      sequence: i,
-      startMs: Math.round(s.start * 1000),
-      endMs: Math.round(s.end * 1000),
-      text: s.text.trim(),
-    }));
+    // When both granularities are requested, Groq returns `words` as one
+    // FLAT top-level array (not nested inside each segment the way
+    // openai-whisper's local CLI does it — see WhisperLocalProvider.js).
+    // Bucket each word into whichever segment's time range contains its
+    // start time, so normalizeTranscript's per-segment wordTimestamps
+    // field (src/transcript/normalize.js) gets populated the same way
+    // regardless of which provider ran.
+    const rawSegments = raw.segments || [];
+    const rawWords = raw.words || [];
+    const segments = rawSegments.map((s, i) => {
+      const startMs = Math.round(s.start * 1000);
+      const endMs = Math.round(s.end * 1000);
+      const words = rawWords
+        .filter((w) => w.start * 1000 >= startMs && w.start * 1000 < endMs)
+        .map((w) => ({ word: w.word, startMs: Math.round(w.start * 1000), endMs: Math.round(w.end * 1000) }));
+      return { sequence: i, startMs, endMs, text: s.text.trim(), words };
+    });
     return {
       fullText: raw.text?.trim() || segments.map((s) => s.text).join(' '),
       language: raw.language || null,

@@ -85,7 +85,10 @@ describe('GroqTranscriptionProvider', () => {
     expect(result).toEqual({
       fullText: 'hello world',
       language: 'en',
-      segments: [{ sequence: 0, startMs: 0, endMs: 1500, text: 'hello world' }],
+      // words: [] since this response had no top-level `words` array (the
+      // request still asks for word granularity — see the dedicated
+      // word-timestamp describe block below for that assertion).
+      segments: [{ sequence: 0, startMs: 0, endMs: 1500, text: 'hello world', words: [] }],
       raw: expect.any(Object),
     });
   });
@@ -207,5 +210,71 @@ describe('GroqTranscriptionProvider', () => {
       const tmpLeftovers = fs.readdirSync(os.tmpdir()).filter((f) => f.startsWith('groq-upload-'));
       expect(tmpLeftovers).toEqual([]);
     }, 15000);
+  });
+
+  describe('word-level timestamps (real feature: enables short, precisely-timed captions instead of whole-sentence blocks)', () => {
+    it('requests both segment and word granularities explicitly', async () => {
+      config.transcription.groqApiKey = 'test-key';
+      let seenBody;
+      await serve((req, body) => {
+        seenBody = body.toString('latin1');
+        return verboseJson({ text: 'x', segments: [] });
+      });
+      await new GroqTranscriptionProvider().transcribe(smallAudioPath);
+      expect(seenBody).toContain('name="timestamp_granularities[]"\r\n\r\nsegment');
+      expect(seenBody).toContain('name="timestamp_granularities[]"\r\n\r\nword');
+    });
+
+    it('buckets the flat top-level words array into each segment by time range', async () => {
+      config.transcription.groqApiKey = 'test-key';
+      await serve(() =>
+        verboseJson({
+          text: 'Hello world. Second part.',
+          segments: [
+            { start: 0, end: 1.5, text: ' Hello world.' },
+            { start: 1.5, end: 3, text: ' Second part.' },
+          ],
+          words: [
+            { word: 'Hello', start: 0.0, end: 0.4 },
+            { word: 'world.', start: 0.5, end: 1.4 },
+            { word: 'Second', start: 1.5, end: 1.9 },
+            { word: 'part.', start: 2.0, end: 2.9 },
+          ],
+        }),
+      );
+
+      const result = await new GroqTranscriptionProvider().transcribe(smallAudioPath);
+
+      expect(result.segments[0].words).toEqual([
+        { word: 'Hello', startMs: 0, endMs: 400 },
+        { word: 'world.', startMs: 500, endMs: 1400 },
+      ]);
+      expect(result.segments[1].words).toEqual([
+        { word: 'Second', startMs: 1500, endMs: 1900 },
+        { word: 'part.', startMs: 2000, endMs: 2900 },
+      ]);
+    });
+
+    it('flows through normalizeTranscript into wordTimestamps on each segment', async () => {
+      config.transcription.groqApiKey = 'test-key';
+      await serve(() =>
+        verboseJson({
+          text: 'Hi.',
+          segments: [{ start: 0, end: 1, text: ' Hi.' }],
+          words: [{ word: 'Hi.', start: 0, end: 0.5 }],
+        }),
+      );
+      const result = await new GroqTranscriptionProvider().transcribe(smallAudioPath);
+      const { normalizeTranscript } = require('../src/transcript/normalize');
+      const normalized = normalizeTranscript(result);
+      expect(normalized.segments[0].wordTimestamps).toEqual([{ word: 'Hi.', startMs: 0, endMs: 500 }]);
+    });
+
+    it('produces an empty words array per segment when the response has no word granularity data (no crash)', async () => {
+      config.transcription.groqApiKey = 'test-key';
+      await serve(() => verboseJson({ text: 'Hi.', segments: [{ start: 0, end: 1, text: ' Hi.' }] })); // no `words` key at all
+      const result = await new GroqTranscriptionProvider().transcribe(smallAudioPath);
+      expect(result.segments[0].words).toEqual([]);
+    });
   });
 });
