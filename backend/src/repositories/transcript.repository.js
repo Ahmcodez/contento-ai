@@ -1,7 +1,16 @@
 const db = require('../db/client');
 
+/**
+ * Replaces any existing transcript for the asset instead of failing on the
+ * unique(media_asset_id) constraint. A stage can legitimately run twice
+ * (BullMQ retry after a crash past this point, or a reaper re-enqueue), and
+ * the second run must not die on a duplicate key. Segments go with the old
+ * transcript via ON DELETE CASCADE.
+ */
 async function create({ mediaAssetId, fullText, language, provider, rawProviderResponse, segments }) {
   return db.transaction(async (trx) => {
+    await trx('transcripts').where({ media_asset_id: mediaAssetId }).del();
+
     const [transcript] = await trx('transcripts')
       .insert({
         media_asset_id: mediaAssetId,

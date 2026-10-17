@@ -16,7 +16,16 @@ async function createMany(processingJobId, candidates) {
     final_score: c.finalScore,
     rank: i + 1,
   }));
-  return db('clip_candidates').insert(rows).returning('*');
+  // Re-running detection must replace the earlier batch, not stack a second
+  // set of candidates on top of it. Candidates that already have a rendered
+  // clip are left alone (detection never legitimately re-runs after render).
+  return db.transaction(async (trx) => {
+    await trx('clip_candidates')
+      .where({ processing_job_id: processingJobId })
+      .whereNotExists(trx('generated_clips').whereRaw('generated_clips.clip_candidate_id = clip_candidates.id'))
+      .del();
+    return trx('clip_candidates').insert(rows).returning('*');
+  });
 }
 
 async function listByProcessingJobId(processingJobId) {

@@ -18,6 +18,10 @@ async function create({ processingJobId, analysis, aiProvider, rawAiResponse }) 
       raw_ai_response: rawAiResponse ? JSON.stringify(rawAiResponse) : null,
       ai_provider: aiProvider,
     })
+    // One analysis per job: a re-run overwrites rather than hitting the
+    // unique(processing_job_id) constraint.
+    .onConflict('processing_job_id')
+    .merge()
     .returning('*');
   return row;
 }
