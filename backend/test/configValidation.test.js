@@ -49,3 +49,30 @@ describe('config fail-fast validation', () => {
     ).toThrow();
   });
 });
+
+describe('reaper config', () => {
+  const readReaper = (overrides) => {
+    const env = {
+      ...process.env,
+      ...overrides,
+      DATABASE_URL: 'postgres://x:x@localhost:5432/x',
+      REDIS_URL: 'redis://localhost:6379',
+      JWT_ACCESS_SECRET: 'x'.repeat(20),
+      JWT_REFRESH_SECRET: 'y'.repeat(20),
+    };
+    const out = execFileSync('node', ['-e', `console.log(JSON.stringify(require('${CONFIG_PATH}').reaper))`], { env, encoding: 'utf-8' });
+    return JSON.parse(out.trim().split('\n').pop());
+  };
+
+  it('is on by default with sane intervals', () => {
+    expect(readReaper({})).toEqual({ enabled: true, intervalMs: 60000, stuckAfterMs: 300000, maxRequeuesPerStage: 2 });
+  });
+
+  it('REAPER_ENABLED=false really turns it off (not the string "false" coerced to true)', () => {
+    expect(readReaper({ REAPER_ENABLED: 'false' }).enabled).toBe(false);
+  });
+
+  it('rejects an interval that would hammer the database', () => {
+    expect(() => readReaper({ REAPER_INTERVAL_MS: '100' })).toThrow();
+  });
+});

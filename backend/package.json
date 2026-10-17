@@ -12,6 +12,7 @@
     "migrate:rollback": "knex migrate:rollback",
     "migrate:make": "knex migrate:make",
     "cleanup": "node scripts/cleanup.js",
+    "reap": "node scripts/reapStuckJobs.js",
     "redis:rate": "node scripts/redisCommandRate.js",
     "queues:migrate": "node scripts/migrateLegacyQueues.js",
     "test": "cross-env NODE_ENV=test jest --runInBand",
