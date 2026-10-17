@@ -244,6 +244,20 @@ const envSchema = z.object({
   // commands/min for the whole worker fleet, which is not worth slowing
   // crash recovery. Must exceed BullMQ's lock renew time (15s).
   QUEUE_STALLED_INTERVAL_MS: z.coerce.number().int().min(15000).max(300000).default(30000),
+
+  // Stuck-job reaper (src/workers/stuckJobReaper.js): finds jobs whose Postgres
+  // state says "in progress" but that have no live BullMQ job behind them
+  // (crash between a state change and the next enqueue, a Redis flush, a job
+  // BullMQ gave up on as stalled) and re-enqueues or fails them.
+  // Explicit enum, not z.coerce.boolean(): that turns the string "false" into true.
+  REAPER_ENABLED: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+  REAPER_INTERVAL_MS: z.coerce.number().int().min(5000).max(3600000).default(60000),
+  // A row must have sat untouched this long before it is even looked at. It only
+  // has to cover the short gap between "state changed" and "next job added";
+  // anything legitimately running still has a live BullMQ job and is skipped.
+  REAPER_STUCK_AFTER_MS: z.coerce.number().int().min(1000).max(86400000).default(300000),
+  // Re-enqueues allowed per job per stage before it is failed for good.
+  REAPER_MAX_REQUEUES_PER_STAGE: z.coerce.number().int().min(0).max(10).default(2),
 });
 
 /**
@@ -396,6 +410,13 @@ function loadConfig() {
       aiRateLimitDurationMs: env.QUEUE_AI_RATE_LIMIT_DURATION_MS,
       drainDelaySeconds: env.QUEUE_DRAIN_DELAY_SECONDS,
       stalledIntervalMs: env.QUEUE_STALLED_INTERVAL_MS,
+    },
+
+    reaper: {
+      enabled: env.REAPER_ENABLED,
+      intervalMs: env.REAPER_INTERVAL_MS,
+      stuckAfterMs: env.REAPER_STUCK_AFTER_MS,
+      maxRequeuesPerStage: env.REAPER_MAX_REQUEUES_PER_STAGE,
     },
   };
 }
