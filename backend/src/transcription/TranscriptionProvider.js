@@ -5,11 +5,11 @@
  * docs/ARCHITECTURE.md §2.10).
  */
 class TranscriptionProvider {
-  /* eslint-disable class-methods-use-this, no-unused-vars */
+  /* eslint-disable no-unused-vars */
   async transcribe(audioFilePath) {
     throw new Error('TranscriptionProvider.transcribe not implemented');
   }
-  /* eslint-enable class-methods-use-this, no-unused-vars */
+  /* eslint-enable no-unused-vars */
 }
 
 class TranscriptionProviderError extends Error {

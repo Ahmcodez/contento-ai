@@ -6,7 +6,7 @@
  * interface, never on a specific vendor SDK.
  */
 class AIProvider {
-  /* eslint-disable class-methods-use-this, no-unused-vars */
+  /* eslint-disable no-unused-vars */
   async generateText({ prompt, systemPrompt, maxTokens, temperature }) {
     throw new Error('AIProvider.generateText not implemented');
   }
@@ -22,7 +22,7 @@ class AIProvider {
   async generateSocialContent({ contentType, transcript, analysis, brandVoice }) {
     throw new Error('AIProvider.generateSocialContent not implemented');
   }
-  /* eslint-enable class-methods-use-this, no-unused-vars */
+  /* eslint-enable no-unused-vars */
 }
 
 /**

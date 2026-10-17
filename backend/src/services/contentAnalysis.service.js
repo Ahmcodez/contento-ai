@@ -43,7 +43,6 @@ async function analyzeTranscript({ provider, transcript, userId, processingJobId
   for (const chunk of chunks) {
     // Sequential, not parallel — bounds concurrent AI spend per job
     // (docs/COST.md §4) rather than firing every chunk at once.
-    // eslint-disable-next-line no-await-in-loop
     const { data } = await callStructured({
       provider,
       prompt: buildPrompt(chunk.text),

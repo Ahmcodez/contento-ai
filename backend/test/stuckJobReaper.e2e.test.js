@@ -105,10 +105,8 @@ describe('stuck job reaper recovers a real pipeline run (e2e)', () => {
     let state;
     const deadline = Date.now() + 90000;
     while (Date.now() < deadline) {
-      // eslint-disable-next-line no-await-in-loop
       state = (await db('processing_jobs').where({ id: processingJob.id }).first()).state;
       if (['COMPLETED', 'FAILED'].includes(state)) break;
-      // eslint-disable-next-line no-await-in-loop
       await sleep(500);
     }
 

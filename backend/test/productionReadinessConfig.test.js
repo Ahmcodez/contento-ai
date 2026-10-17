@@ -9,7 +9,6 @@ describe('GEMINI_MODEL and FFMPEG_TIMEOUT_MS configuration', () => {
   function loadConfigWith(overrides) {
     jest.resetModules();
     process.env = { ...ORIGINAL_ENV, ...overrides };
-    // eslint-disable-next-line global-require
     return require('../src/config');
   }
 

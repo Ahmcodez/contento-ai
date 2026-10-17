@@ -16,7 +16,6 @@ describe('TRUST_PROXY configuration', () => {
     } else {
       process.env.TRUST_PROXY = value;
     }
-    // eslint-disable-next-line global-require
     return require('../src/config');
   }
 
@@ -76,14 +75,12 @@ describe('app.js applies TRUST_PROXY to the Express app before rate limiting rea
     } else {
       process.env.TRUST_PROXY = value;
     }
-    // eslint-disable-next-line global-require
     const createApp = require('../src/app');
     const app = createApp();
     // Each resetModules() cycle re-requires src/db/client.js and
     // src/redis/client.js fresh, opening a new pool/connection. Track and
     // close them so this file doesn't leak handles into the rest of the
     // suite when run with the other test files.
-    // eslint-disable-next-line global-require
     openHandles.push(require('../src/db/client'), require('../src/redis/client'));
     return app;
   }

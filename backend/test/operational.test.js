@@ -22,7 +22,6 @@ describe('operational endpoints', () => {
     });
 
     it('reports 503/degraded when redis is not ready, without touching the database check', async () => {
-      // eslint-disable-next-line global-require
       const redis = require('../src/redis/client');
       const originalStatus = redis.status;
       // ioredis's own status values while disconnected/reconnecting

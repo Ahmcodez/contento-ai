@@ -9,7 +9,6 @@ const GeminiProvider = require('./GeminiProvider');
  * "not configured" behavior rather than fake production behavior.
  */
 class NotConfiguredAIProvider {
-  /* eslint-disable class-methods-use-this */
   #fail() {
     throw new AIProviderError(
       'No AI provider is configured. Set AI_PROVIDER=gemini and GEMINI_API_KEY to enable AI features.',
@@ -21,7 +20,6 @@ class NotConfiguredAIProvider {
   async generateStructuredOutput() { this.#fail(); }
   async analyzeContent() { this.#fail(); }
   async generateSocialContent() { this.#fail(); }
-  /* eslint-enable class-methods-use-this */
 }
 
 let instance;

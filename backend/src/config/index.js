@@ -280,10 +280,8 @@ function loadConfig() {
   const parsed = envSchema.safeParse(process.env);
 
   if (!parsed.success) {
-    // eslint-disable-next-line no-console
     console.error('Invalid environment configuration:');
     for (const issue of parsed.error.issues) {
-      // eslint-disable-next-line no-console
       console.error(`  - ${issue.path.join('.')}: ${issue.message}`);
     }
     process.exit(1);
@@ -296,9 +294,7 @@ function loadConfig() {
   // misconfigured (mirrors the same fail-fast principle already applied
   // to AI provider config — see docs/COST.md §4).
   if (env.STORAGE_DRIVER === 's3' && !env.S3_BUCKET) {
-    // eslint-disable-next-line no-console
     console.error('Invalid environment configuration:');
-    // eslint-disable-next-line no-console
     console.error('  - S3_BUCKET is required when STORAGE_DRIVER=s3');
     process.exit(1);
   }

@@ -278,7 +278,6 @@ async function sweep({ now = Date.now() } = {}) {
     const queuesNeeded = new Set(work.filter((w) => w.stage).map((w) => STAGE_TO_QUEUE[w.stage]));
     for (const queueName of queuesNeeded) {
       try {
-        // eslint-disable-next-line no-await-in-loop
         liveIndexes.set(queueName, await loadLiveJobIndex(queueName));
       } catch (err) {
         logger.error({ queue: queueName, err: err.message }, 'reaper: cannot read queue, skipping its candidates');
@@ -289,7 +288,6 @@ async function sweep({ now = Date.now() } = {}) {
       result.examined += 1;
       let outcome;
       try {
-        // eslint-disable-next-line no-await-in-loop
         outcome = await recoverOne(kind, row, stage, liveIndexes, cutoff);
       } catch (err) {
         logger.error({ kind, id: row.id, state: row.state, err: err.message }, 'reaper: recovery failed for one job');

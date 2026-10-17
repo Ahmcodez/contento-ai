@@ -39,7 +39,6 @@ async function processContentGenerate(job) {
 
   for (const contentType of contentGenerationService.CONTENT_TYPES) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       const { body, metadata } = await contentGenerationService.generateContent({
         provider,
         contentType,
@@ -48,7 +47,6 @@ async function processContentGenerate(job) {
         userId,
         processingJobId,
       });
-      // eslint-disable-next-line no-await-in-loop
       await contentGenerationService.persistContent({
         processingJobId,
         contentType,

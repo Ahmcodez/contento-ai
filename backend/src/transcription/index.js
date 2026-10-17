@@ -4,14 +4,12 @@ const WhisperLocalProvider = require('./WhisperLocalProvider');
 const GroqTranscriptionProvider = require('./GroqTranscriptionProvider');
 
 class NotConfiguredTranscriptionProvider {
-  /* eslint-disable class-methods-use-this */
   async transcribe() {
     throw new TranscriptionProviderError(
       'No transcription provider is configured. Set TRANSCRIPTION_PROVIDER=whisper-local (and install the whisper CLI) or TRANSCRIPTION_PROVIDER=groq (and set GROQ_API_KEY) to enable transcription.',
       { retryable: false, reason: 'not_configured' },
     );
   }
-  /* eslint-enable class-methods-use-this */
 }
 
 let instance;

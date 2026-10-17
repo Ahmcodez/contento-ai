@@ -16,7 +16,6 @@ describe('admin routes (queue observability)', () => {
     } else {
       process.env.ADMIN_API_KEY = value;
     }
-    // eslint-disable-next-line global-require
     const createApp = require('../src/app');
     return createApp();
   }
@@ -41,9 +40,7 @@ describe('admin routes (queue observability)', () => {
 
   it('returns real per-queue job counts when the key matches, reflecting an actually-enqueued job', async () => {
     const app = buildAppWithAdminKey('supersecret');
-    // eslint-disable-next-line global-require
     const { enqueueVideoValidate } = require('../src/queue/producers');
-    // eslint-disable-next-line global-require
     const { PHYSICAL_QUEUES, QUEUE_NAMES, getQueue, closeAllQueues } = require('../src/queue/queues');
 
     await getQueue(QUEUE_NAMES.VIDEO_VALIDATE).drain();

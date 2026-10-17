@@ -9,7 +9,6 @@ const FRESH = () => new Date();
 
 async function clearQueues() {
   for (const name of Object.values(PHYSICAL_QUEUES)) {
-    // eslint-disable-next-line no-await-in-loop
     await getPhysicalQueue(name).obliterate({ force: true });
   }
 }
@@ -147,7 +146,6 @@ describe('stuck job reaper: pipeline jobs', () => {
 
     expect(result).toEqual({ examined: 0, requeued: 0, failed: 0, skipped: 0 });
     for (const name of Object.values(PHYSICAL_QUEUES)) {
-      // eslint-disable-next-line no-await-in-loop
       expect(await jobsIn(name)).toHaveLength(0);
     }
   });
@@ -157,12 +155,9 @@ describe('stuck job reaper: pipeline jobs', () => {
     const max = config.reaper.maxRequeuesPerStage;
 
     for (let i = 0; i < max; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
       expect((await reaper.sweep()).requeued).toBe(1);
       // simulate the re-enqueued job vanishing again and time passing
-      // eslint-disable-next-line no-await-in-loop
       await clearQueues();
-      // eslint-disable-next-line no-await-in-loop
       await db('processing_jobs').where({ id: job.id }).update({ updated_at: STALE() });
     }
 
@@ -184,7 +179,6 @@ describe('stuck job reaper: pipeline jobs', () => {
     const { job } = await seedPipelineJob('AUDIO_EXTRACTED');
     // Used up its allowance in an earlier stage...
     for (let i = 1; i <= config.reaper.maxRequeuesPerStage; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
       await db('processing_job_events').insert({
         processing_job_id: job.id,
         from_state: 'VALIDATED',
@@ -264,11 +258,8 @@ describe('stuck job reaper: URL imports', () => {
   test('fails an import after the allowance is used up', async () => {
     const row = await seedImport('DOWNLOADING');
     for (let i = 0; i < config.reaper.maxRequeuesPerStage; i += 1) {
-      // eslint-disable-next-line no-await-in-loop
       await reaper.sweep();
-      // eslint-disable-next-line no-await-in-loop
       await clearQueues();
-      // eslint-disable-next-line no-await-in-loop
       await db('media_imports').where({ id: row.id }).update({ updated_at: STALE() });
     }
     expect((await reaper.sweep()).failed).toBe(1);
@@ -284,9 +275,7 @@ describe('startReaper', () => {
     const deadline = Date.now() + 5000;
     let queued = [];
     while (Date.now() < deadline && queued.length === 0) {
-      // eslint-disable-next-line no-await-in-loop
       await new Promise((r) => setTimeout(r, 50));
-      // eslint-disable-next-line no-await-in-loop
       queued = await jobsIn(PHYSICAL_QUEUES.TRANSCRIPTION);
     }
     handle.stop();

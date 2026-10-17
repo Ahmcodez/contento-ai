@@ -6,7 +6,7 @@
  * client-supplied filenames (see src/utils/sanitize.js).
  */
 class StorageDriver {
-  /* eslint-disable class-methods-use-this, no-unused-vars */
+  /* eslint-disable no-unused-vars */
   async saveFromPath(key, sourcePath) {
     throw new Error('StorageDriver.saveFromPath not implemented');
   }
@@ -30,7 +30,7 @@ class StorageDriver {
   async size(key) {
     throw new Error('StorageDriver.size not implemented');
   }
-  /* eslint-enable class-methods-use-this, no-unused-vars */
+  /* eslint-enable no-unused-vars */
 }
 
 module.exports = StorageDriver;
