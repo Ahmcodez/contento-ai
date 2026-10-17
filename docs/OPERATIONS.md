@@ -59,14 +59,11 @@ curl -H "X-Admin-Key: $ADMIN_API_KEY" https://your-api-host/api/v1/admin/queues
 This is intentionally minimal — real counts, not a dashboard. A fuller
 UI (e.g. Bull Board) is a reasonable future addition, not built yet.
 
-## 4. Known gap: no automatic stuck-job reaper
+## 4. Stuck-job reaper
 
-A job can end up orphaned — e.g. a worker process is killed (OOM,
-deploy, host failure) mid-stage, after BullMQ has marked the job active
-but before `wrapWithErrorPersistence`'s failure path ever runs. Nothing
-currently detects and recovers that job automatically; it will sit in a
-non-terminal state until someone notices (via §3 above, or a direct
-query) and manually intervenes. This has been a known, deliberate,
-documented gap since the project's original handoff notes and remains
-one — see `docs/RELEASE_READINESS.md` for it being carried forward
-rather than silently dropped.
+Jobs whose Postgres state says "in progress" but that have no live queue job
+(a crash between a state change and the next enqueue, a Redis flush, a job
+BullMQ gave up on as stalled) are found and recovered automatically by the
+reaper that runs inside the worker process: re-enqueued a bounded number of
+times, then failed with a clear message. See `docs/STUCK_JOB_REAPER.md` for
+the design, configuration and `npm run reap` for a manual sweep.

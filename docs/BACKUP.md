@@ -67,12 +67,12 @@ that came after that point.
 
 **Lost Redis instance**: no restore needed. Restart Redis, restart the
 worker. Jobs that were in-flight (not yet reached a terminal state in
-Postgres) should be identified via
-`SELECT * FROM processing_jobs WHERE state NOT IN ('COMPLETED','FAILED','CANCELLED') AND updated_at < now() - interval '1 hour'`
-and either manually re-enqueued from their last known state or,
-simpler, marked `FAILED` with a note to the affected users to re-upload —
-there is no automatic "stuck job reaper" yet (documented gap, see
-`docs/SCALABILITY.md` future-work framing).
+Postgres) are recovered by the stuck-job reaper (`docs/STUCK_JOB_REAPER.md`): once the
+worker is back it re-enqueues each one from its last known state, or fails it
+with a clear message after a bounded number of attempts. To not wait for the
+next sweep, run `npm run reap` right after Redis is back. To see what is
+affected first:
+`SELECT * FROM processing_jobs WHERE state NOT IN ('COMPLETED','FAILED','CANCELLED') AND updated_at < now() - interval '1 hour'`.
 
 **Lost object storage bucket**: relational data survives (Postgres is
 independent), but every `storage_key` reference becomes a dangling
@@ -97,7 +97,5 @@ pressure.
 
 - No automated backup verification / restore drills. The commands above
   are documented but not exercised on a schedule.
-- No automated "stuck job" detection/recovery (see the Redis-loss
-  scenario above).
 - No cross-region replication for either Postgres or object storage — not
   justified at this project's current scale (`docs/SCALABILITY.md`).

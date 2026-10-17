@@ -117,6 +117,9 @@ automatically. On top of that:
   channel only once real infra exists — not in V1).
 - Bull Board (self-hosted, free) is the primary manual dead-letter
   inspection tool in V1 — no custom DLQ UI is built.
+- Rows whose Postgres state is in progress but that have no live queue job
+  at all (lost enqueue, Redis flush, a job BullMQ failed as stalled) are
+  recovered by the stuck-job reaper — see `docs/STUCK_JOB_REAPER.md`.
 
 ## 5. Concurrency
 

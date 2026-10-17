@@ -118,12 +118,9 @@ doesn't include — cosmetic, not fixed in this pass, see §8).
 
 ## 3. Medium-priority improvements (not fixed this pass — recommended)
 
-- **No stuck-job reaper.** A worker killed mid-stage (OOM, deploy,
-  host failure) can leave a job in a non-terminal state indefinitely
-  with nothing to detect and recover it automatically. This has been a
-  known, deliberate gap since the project's original handoff and
-  remains one — now at least visible via §2.3's new admin endpoint
-  rather than invisible.
+- **Stuck-job reaper — resolved.** Rows left in a non-terminal state with
+  no live queue job are now re-enqueued or failed automatically; see
+  `docs/STUCK_JOB_REAPER.md`.
 - **Docker containers run as root** — no `USER` directive in
   `backend/Dockerfile`. Standard hardening gap, not urgent for the
   documented dev-only compose setup, but worth fixing before the image
