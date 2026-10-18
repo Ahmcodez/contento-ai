@@ -110,9 +110,36 @@
 - Quota system (`docs/COST.md`) is itself an abuse-prevention mechanism,
   not just a cost control — it caps how much of any resource (uploads, AI
   calls, storage) one account can consume regardless of intent.
-- Idempotency keys on job-enqueuing endpoints prevent duplicate-submission
-  abuse (accidental or scripted double-clicks/retries) from creating
-  redundant paid work.
+- Duplicate submissions are blunted without client-supplied idempotency keys
+  (not implemented): uploading the same file to the same project is rejected by
+  checksum, the concurrent-job limit caps simultaneous work, and `POST
+  /jobs/:id/retry` is guarded in the database so a double click retries once.
 - Structured logging with correlation IDs makes it feasible to detect and
   investigate abuse patterns (e.g. one IP hitting `/register` repeatedly)
   even before a dedicated abuse-detection system exists.
+
+## 9. URL import (untrusted outbound requests)
+"Paste Video URL" makes the server fetch an address a user chose, which is the
+classic SSRF setup. Details in `docs/URL_IMPORT.md`; the properties that matter:
+- **Direct links** go through `src/security/ssrfSafeFetch.js`: DNS is resolved
+  and checked before connecting (loopback, private, link-local, carrier-grade NAT
+  and cloud-metadata ranges are rejected), the connection is pinned to that
+  validated IP so DNS rebinding can't swap it afterwards, and every redirect hop
+  is re-validated, up to a fixed limit.
+- **yt-dlp providers** (YouTube, Vimeo, TikTok, Dropbox) make their own requests
+  inside a subprocess that `ssrfSafeFetch` does not cover. The safeguard is a
+  strict hostname allowlist per provider, never a substring match, so only those
+  sites ever reach yt-dlp.
+- Every download is size-capped, and videos over the duration cap are rejected at
+  preview time, before anything is downloaded.
+- A downloaded file is treated exactly like an untrusted upload: content sniffed,
+  ffprobe'd, checksum-deduped.
+- Creating an import has its own per-user rate limiter.
+
+## 10. Admin endpoints
+`/api/v1/admin/*` (queue observability) is gated by a shared `ADMIN_API_KEY`
+sent as `X-Admin-Key`. With no key configured the routes return 404, as if they
+did not exist; they never fall back to open. A wrong or missing key returns the
+same generic 401 as the rest of the API. This is a coarse operator credential,
+not per-user auth: keep it out of client code and rotate it like any secret.
+

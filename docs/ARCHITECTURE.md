@@ -1,6 +1,8 @@
 # Contento AI — System Architecture
 
-Status: **Design phase — no implementation yet.**
+Status: **Implemented.** This file is the original design; the section below
+lists where the running system differs from it. Where they disagree, the code
+and the other docs named below are authoritative.
 Owner: Principal Architecture doc, versioned alongside the code. Update this
 file whenever an architectural decision changes; add an ADR (see
 `docs/adr/`) for anything non-trivial.
@@ -9,6 +11,35 @@ This document covers system architecture only. Schema detail lives in
 `docs/DATABASE.md`, API contracts in `docs/API.md`, queue/job contracts in
 `docs/QUEUE.md`, and individual decisions in `docs/adr/*.md`. Read this file
 first — it ties the others together.
+
+---
+
+## 0. Where the implementation differs from this design
+
+The design below was written before the code. The decisions held; these details
+changed:
+
+- **Language and layout.** Plain JavaScript (CommonJS) in `backend/`, with the
+  Next.js 16 / React 19 app in `frontend/`. The TypeScript monorepo
+  (`apps/*`, `packages/*`) shown in the repository-structure section was never
+  built. API and worker are still one codebase deployed as two processes
+  (`src/server.js`, `src/worker.js`, one Docker image).
+- **Queues.** Ten logical pipeline stages run on **five physical BullMQ queues**
+  (`pipeline-light`, `ai-process`, `url-import-download`, `transcription-process`,
+  `clip-render`), not one queue per stage. `docs/QUEUE.md` is authoritative.
+  Clip scoring is not a separate stage (it runs inside `clips.detect`).
+- **Transcription.** `TranscriptionProvider` has two implementations:
+  `whisper-local` and `groq` (hosted, recommended). Both return word-level
+  timestamps, which the caption generator uses.
+- **AI.** `AIProvider` with a Gemini adapter, a proactive queue rate limiter,
+  `RetryInfo` backoff, and an automatic one-hop fallback model on daily-quota or
+  overload errors (`docs/AI.md`).
+- **URL import** (a "clean seam" in the original scope) is built: provider
+  registry plus yt-dlp, with its own `media_imports` state machine. See
+  `docs/URL_IMPORT.md`.
+- **Recovery.** A stuck-job reaper recovers jobs with no live queue job
+  (`docs/STUCK_JOB_REAPER.md`), and `POST /jobs/:id/retry` resumes a failed job
+  from the stage it failed in (`docs/API.md`).
 
 ---
 
