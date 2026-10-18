@@ -105,9 +105,9 @@ includes `{ "data": [...], "pagination": { "page", "pageSize", "total" } }`.
 
 ### `POST /api/v1/jobs/:jobId/retry`
 - Auth: bearer + ownership.
-- Only valid if `state === FAILED`. Re-enqueues from `failureStage`, not from scratch (idempotency guards in `docs/PIPELINE.md` make this safe and avoid re-paying for already-completed stages).
-- Response `202`: updated `ProcessingJob`.
-- Errors: `409 NOT_RETRYABLE` (e.g. failure was a deterministic validation rejection).
+- Only valid if `state === FAILED`. Resumes from the stage the job failed in (taken from its last `FAILED` event), not from scratch, so work already done is reused and not paid for again. Failure fields are cleared and a `retry: true` event is recorded.
+- Response `202`: the updated job, same shape as `GET /jobs/:jobId`.
+- Errors: `409 NOT_RETRYABLE` if the job is not `FAILED`, if its media was rejected at validation (too long, no audio, over quota), or if the failing stage can't be determined; `429 QUOTA_EXCEEDED` if the user is already at their concurrent-job limit; `404` if not found or not yours. Simultaneous retries are safe: only one wins, the rest get `409`.
 
 ---
 
