@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const path = require('path');
 const db = require('../db/client');
 const redis = require('../redis/client');
 const config = require('../config');
@@ -7,7 +6,8 @@ const logger = require('../logger');
 const metrics = require('../metrics');
 const processingJobRepository = require('../repositories/processingJob.repository');
 const mediaImportRepository = require('../repositories/mediaImport.repository');
-const { QUEUE_NAMES, RETRY_CONFIG, getQueue, getPhysicalQueue, STAGE_TO_QUEUE } = require('../queue/queues');
+const { QUEUE_NAMES, getPhysicalQueue, STAGE_TO_QUEUE } = require('../queue/queues');
+const { PIPELINE_STATE_TO_STAGE, STAGE_JOB_NAMES, audioKeyFor, buildPipelinePayload, enqueueStage } = require('../queue/stageResume');
 
 /**
  * Stuck-job reaper.
@@ -40,28 +40,6 @@ const LOCK_TTL_MS = 5 * 60 * 1000;
 
 const INTERRUPTED_MESSAGE = 'Processing was interrupted and could not be recovered. Please try again.';
 
-/** Non-terminal processing_jobs states -> the stage whose queue job should exist. */
-const PIPELINE_STATE_TO_STAGE = {
-  UPLOADED: QUEUE_NAMES.VIDEO_VALIDATE,
-  VALIDATING: QUEUE_NAMES.VIDEO_VALIDATE,
-  VALIDATED: QUEUE_NAMES.AUDIO_EXTRACT,
-  EXTRACTING_AUDIO: QUEUE_NAMES.AUDIO_EXTRACT,
-  AUDIO_EXTRACTED: QUEUE_NAMES.TRANSCRIPTION_PROCESS,
-  TRANSCRIBING: QUEUE_NAMES.TRANSCRIPTION_PROCESS,
-  TRANSCRIBED: QUEUE_NAMES.CONTENT_ANALYZE,
-  ANALYZING: QUEUE_NAMES.CONTENT_ANALYZE,
-  ANALYZED: QUEUE_NAMES.CLIPS_DETECT,
-  FINDING_CLIPS: QUEUE_NAMES.CLIPS_DETECT,
-  CLIPS_FOUND: QUEUE_NAMES.CLIPS_DETECT,
-  SCORING_CLIPS: QUEUE_NAMES.CLIPS_DETECT,
-  CLIPS_SCORED: QUEUE_NAMES.CLIP_RENDER,
-  RENDERING_CLIPS: QUEUE_NAMES.CLIP_RENDER,
-  CLIPS_RENDERED: QUEUE_NAMES.CONTENT_GENERATE,
-  GENERATING_CONTENT: QUEUE_NAMES.CONTENT_GENERATE,
-  CONTENT_GENERATED: QUEUE_NAMES.JOB_FINALIZE,
-  FINALIZING: QUEUE_NAMES.JOB_FINALIZE,
-};
-
 /**
  * Non-terminal media_imports states that are driven by a queue job. Not here
  * on purpose: WAITING_CONFIRMATION (waiting on the user, no job expected) and
@@ -74,43 +52,6 @@ const IMPORT_STATE_TO_STAGE = {
   DOWNLOADING: QUEUE_NAMES.URL_IMPORT_DOWNLOAD,
 };
 const IMPORT_FAIL_ONLY_STATES = ['VALIDATING_MEDIA'];
-
-const STAGE_JOB_NAMES = {
-  [QUEUE_NAMES.URL_IMPORT_RESOLVE]: 'url-import.resolve',
-  [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: 'url-import.download',
-  [QUEUE_NAMES.VIDEO_VALIDATE]: 'video.validate',
-  [QUEUE_NAMES.AUDIO_EXTRACT]: 'audio.extract',
-  [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: 'transcription.process',
-  [QUEUE_NAMES.CONTENT_ANALYZE]: 'content.analyze',
-  [QUEUE_NAMES.CLIPS_DETECT]: 'clips.detect',
-  [QUEUE_NAMES.CLIP_RENDER]: 'clip.render',
-  [QUEUE_NAMES.CONTENT_GENERATE]: 'content.generate',
-  [QUEUE_NAMES.JOB_FINALIZE]: 'job.finalize',
-};
-
-/** Same derivation as audioExtract.processor.js, so a re-enqueued job points at the same file. */
-function audioKeyFor(storageKey) {
-  return storageKey.replace(path.extname(storageKey), '.audio.wav');
-}
-
-/**
- * Rebuilds the exact payload the stage's own producer would have enqueued,
- * from what is in the database. Returns null if it can't (asset gone).
- */
-async function buildPipelinePayload(stage, row) {
-  const asset = await db('media_assets').where({ id: row.media_asset_id }).first();
-  if (!asset) return null;
-
-  const base = { processingJobId: row.id, mediaAssetId: asset.id };
-  if (stage === QUEUE_NAMES.TRANSCRIPTION_PROCESS) {
-    return { ...base, audioStorageKey: audioKeyFor(asset.storage_key) };
-  }
-  if (stage === QUEUE_NAMES.CLIP_RENDER) {
-    const candidates = await db('clip_candidates').where({ processing_job_id: row.id }).orderBy('rank', 'asc').select('id');
-    return { ...base, clipCandidateIds: candidates.map((c) => c.id) };
-  }
-  return base;
-}
 
 /** One lookup table per sweep: which (job name, entity id) pairs have a live BullMQ job. */
 async function loadLiveJobIndex(physicalQueueName) {
@@ -160,14 +101,6 @@ async function recordRequeue(eventsTable, fkColumn, id, state, stage, attempt) {
     from_state: state,
     to_state: state,
     metadata: JSON.stringify({ reaper: 'requeued', stage, attempt }),
-  });
-}
-
-async function enqueueStage(stage, payload) {
-  return getQueue(stage).add(STAGE_JOB_NAMES[stage], payload, {
-    ...RETRY_CONFIG[stage],
-    removeOnComplete: 100,
-    removeOnFail: 500,
   });
 }
 
