@@ -30,6 +30,7 @@ jest.mock('../src/transcription', () => ({
 const createApp = require('../src/app');
 const { startWorkers, stopWorkers } = require('../src/workers/index');
 const { closeAllQueues } = require('../src/queue/queues');
+const { resetAiQueueState } = require('./helpers/queueState');
 
 const app = createApp();
 const FIXTURE = path.join(__dirname, 'fixtures', 'sample.mp4');
@@ -42,6 +43,7 @@ describe('complete user workflow (real HTTP + real queue + real workers)', () =>
   let workers;
 
   beforeAll(async () => {
+    await resetAiQueueState(); // earlier worker-based test files may have spent the shared rate-limit budget
     await resetDb();
 
     global.__e2eMockTranscriptionProvider = {
@@ -96,6 +98,7 @@ describe('complete user workflow (real HTTP + real queue + real workers)', () =>
 
   afterAll(async () => {
     await stopWorkers(workers || []);
+    await resetAiQueueState();
     await closeAllQueues();
   }, 20000);
 

@@ -7,6 +7,7 @@ const fs = require('fs/promises');
 const db = require('../src/db/client');
 const config = require('../src/config');
 const { installMockProviders, removeMockProviders } = require('./helpers/mockProviders');
+const { resetAiQueueState } = require('./helpers/queueState');
 
 jest.mock('../src/ai', () => ({ getAIProvider: () => global.__mockAIProvider }));
 jest.mock('../src/transcription', () => ({ getTranscriptionProvider: () => global.__mockTranscriptionProvider }));
@@ -24,11 +25,13 @@ describe('stuck job reaper recovers a real pipeline run (e2e)', () => {
 
   beforeAll(async () => {
     await resetDb();
+    await resetAiQueueState();
     installMockProviders();
   });
 
   afterAll(async () => {
     if (workers) await require('../src/workers').stopWorkers(workers);
+    await resetAiQueueState(); // don't leave a spent rate-limit budget for the next test file
     await require('../src/queue/queues').closeAllQueues();
     removeMockProviders();
   });
