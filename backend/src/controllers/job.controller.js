@@ -20,6 +20,11 @@ const cancel = asyncHandler(async (req, res) => {
   res.status(200).json(job);
 });
 
+const retry = asyncHandler(async (req, res) => {
+  const job = await jobService.retryJob(req.user.id, req.params.jobId);
+  res.status(202).json(job);
+});
+
 const getTranscript = asyncHandler(async (req, res) => {
   const transcript = await transcriptViewService.getTranscriptForJob(req.user.id, req.params.jobId);
   if (!transcript) {
@@ -43,4 +48,4 @@ const regenerateContent = asyncHandler(async (req, res) => {
   res.status(200).json({ content });
 });
 
-module.exports = { getOne, getEvents, cancel, getTranscript, getClips, getContent, regenerateContent };
+module.exports = { getOne, getEvents, cancel, retry, getTranscript, getClips, getContent, regenerateContent };

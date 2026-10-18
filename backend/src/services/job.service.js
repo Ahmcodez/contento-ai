@@ -1,6 +1,9 @@
 const AppError = require('../utils/AppError');
 const processingJobRepository = require('../repositories/processingJob.repository');
 const workspaceService = require('./workspace.service');
+const quotaService = require('./quota.service');
+const db = require('../db/client');
+const { PIPELINE_STATE_TO_STAGE, buildPipelinePayload, enqueueStage } = require('../queue/stageResume');
 
 const STATE_GROUPS = {
   UPLOADING: 'uploading',
@@ -29,9 +32,7 @@ const STATE_GROUPS = {
 
 const TERMINAL_STATES = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 
-async function getJob(userId, jobId) {
-  const job = await processingJobRepository.findByIdForUser(jobId, userId);
-  if (!job) throw AppError.notFound('Processing job not found');
+function serializeJob(job) {
   return {
     id: job.id,
     state: job.state,
@@ -43,6 +44,12 @@ async function getJob(userId, jobId) {
     startedAt: job.started_at,
     completedAt: job.completed_at,
   };
+}
+
+async function getJob(userId, jobId) {
+  const job = await processingJobRepository.findByIdForUser(jobId, userId);
+  if (!job) throw AppError.notFound('Processing job not found');
+  return serializeJob(job);
 }
 
 /**
@@ -84,4 +91,47 @@ async function cancelJob(userId, jobId) {
   return { id: updated.id, state: updated.state };
 }
 
-module.exports = { getJob, getJobEvents, cancelJob, assertJobAccess, STATE_GROUPS, TERMINAL_STATES };
+/**
+ * Retry a FAILED job from the stage it failed in, not from scratch: everything
+ * already produced (audio, transcript, analysis, ...) is reused, so a retry
+ * after e.g. a provider outage only pays for the work that didn't finish.
+ *
+ * Not retryable: jobs that are not FAILED, jobs whose media was rejected at
+ * validation (too long, no audio, over quota -- retrying would just bypass
+ * those checks), and jobs whose failing stage can't be determined.
+ *
+ * If enqueueing fails after the job is reopened (Redis down), the row is left
+ * in the in-progress state and the stuck-job reaper picks it up.
+ */
+async function retryJob(userId, jobId) {
+  const job = await assertJobAccess(userId, jobId);
+  if (job.state !== 'FAILED') {
+    throw AppError.conflict('Only a failed job can be retried', 'NOT_RETRYABLE');
+  }
+
+  const asset = await db('media_assets').where({ id: job.media_asset_id }).first();
+  if (!asset || asset.status === 'rejected') {
+    throw AppError.conflict(
+      asset ? `This video was rejected and cannot be retried: ${asset.rejection_reason}` : 'The source video no longer exists',
+      'NOT_RETRYABLE',
+    );
+  }
+
+  const resumeState = await processingJobRepository.findLastFailureState(jobId);
+  const stage = PIPELINE_STATE_TO_STAGE[resumeState];
+  if (!stage) {
+    throw AppError.conflict('This job cannot be resumed. Please upload the video again.', 'NOT_RETRYABLE');
+  }
+
+  await quotaService.assertCanStartNewJob(userId);
+
+  const reopened = await processingJobRepository.reopenFailed(jobId, resumeState);
+  if (!reopened) {
+    throw AppError.conflict('This job is already being retried', 'NOT_RETRYABLE'); // lost a race with another retry
+  }
+
+  await enqueueStage(stage, await buildPipelinePayload(stage, reopened));
+  return serializeJob(reopened);
+}
+
+module.exports = { getJob, getJobEvents, cancelJob, retryJob, assertJobAccess, STATE_GROUPS, TERMINAL_STATES };

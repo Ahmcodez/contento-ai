@@ -61,6 +61,43 @@ async function transitionState(id, { fromState, toState, progressPercent, errorM
   });
 }
 
+/**
+ * State the job was in when it last failed, read from the FAILED event's
+ * from_state. Every failure path (processors, the retry-exhaustion wrapper, the
+ * reaper) records it there, whereas failure_stage mixes state names and queue
+ * names, so this is the one reliable source for "where do I resume from".
+ */
+async function findLastFailureState(id) {
+  const event = await db('processing_job_events')
+    .where({ processing_job_id: id, to_state: 'FAILED' })
+    .orderBy('created_at', 'desc')
+    .first();
+  return event ? event.from_state : null;
+}
+
+/**
+ * FAILED -> toState for a user retry. Guarded on state = 'FAILED' in the UPDATE
+ * itself, so two simultaneous retries can't both succeed (the loser gets null).
+ * Clears the failure fields and completed_at; the event carries retry:true,
+ * which also marks where the reaper's per-stage re-enqueue allowance restarts.
+ */
+async function reopenFailed(id, toState) {
+  return db.transaction(async (trx) => {
+    const [job] = await trx(TABLE)
+      .where({ id, state: 'FAILED' })
+      .update({ state: toState, error_message: null, failure_stage: null, completed_at: null, updated_at: trx.fn.now() })
+      .returning('*');
+    if (!job) return null;
+    await trx('processing_job_events').insert({
+      processing_job_id: id,
+      from_state: 'FAILED',
+      to_state: toState,
+      metadata: JSON.stringify({ retry: true }),
+    });
+    return job;
+  });
+}
+
 async function listEvents(processingJobId) {
   return db('processing_job_events')
     .where({ processing_job_id: processingJobId })
@@ -78,4 +115,13 @@ async function countActiveForUser(userId) {
   return Number(result.count);
 }
 
-module.exports = { create, findByIdScoped, findByIdForUser, transitionState, listEvents, countActiveForUser };
+module.exports = {
+  create,
+  findByIdScoped,
+  findByIdForUser,
+  transitionState,
+  findLastFailureState,
+  reopenFailed,
+  listEvents,
+  countActiveForUser,
+};

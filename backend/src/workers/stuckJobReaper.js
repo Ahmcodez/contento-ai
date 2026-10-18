@@ -87,11 +87,20 @@ async function claimRow(table, id, state, cutoff) {
 }
 
 async function countPriorRequeues(eventsTable, fkColumn, id, state) {
-  const row = await db(eventsTable)
-    .where({ [fkColumn]: id, to_state: state })
-    .whereRaw("metadata->>'reaper' = 'requeued'")
-    .count('id as count')
+  // A user retry gives the job a fresh allowance: only count re-enqueues made
+  // after the most recent retry event (see processingJobRepository.reopenFailed).
+  const lastRetry = await db(eventsTable)
+    .where({ [fkColumn]: id })
+    .whereRaw("metadata->>'retry' = 'true'")
+    .max('created_at as at')
     .first();
+
+  const query = db(eventsTable)
+    .where({ [fkColumn]: id, to_state: state })
+    .whereRaw("metadata->>'reaper' = 'requeued'");
+  if (lastRetry && lastRetry.at) query.andWhere('created_at', '>', lastRetry.at);
+
+  const row = await query.count('id as count').first();
   return Number(row.count);
 }
 

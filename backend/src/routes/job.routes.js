@@ -19,6 +19,7 @@ const contentTypeParam = jobIdParam.extend({
 router.get('/jobs/:jobId', requireAuth, validate(jobIdParam), controller.getOne);
 router.get('/jobs/:jobId/events', requireAuth, validate(jobIdParam), controller.getEvents);
 router.post('/jobs/:jobId/cancel', requireAuth, validate(jobIdParam), controller.cancel);
+router.post('/jobs/:jobId/retry', requireAuth, validate(jobIdParam), controller.retry);
 router.get('/jobs/:jobId/transcript', requireAuth, validate(jobIdParam), controller.getTranscript);
 router.get('/jobs/:jobId/clips', requireAuth, validate(jobIdParam), controller.getClips);
 router.get('/jobs/:jobId/content', requireAuth, validate(jobIdParam), controller.getContent);
