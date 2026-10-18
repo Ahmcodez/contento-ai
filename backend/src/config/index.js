@@ -190,8 +190,9 @@ const envSchema = z.object({
   FFMPEG_TIMEOUT_MS: z.coerce.number().int().positive().default(5 * 60 * 1000),
 
   // yt-dlp powers the YouTube/Vimeo/TikTok/Dropbox URL-import providers
-  // (src/providers/) — a separate binary from ffmpeg, installed via
-  // `pip install yt-dlp`, not bundled with this app. See
+  // (src/providers/) — a separate binary from ffmpeg, not bundled with
+  // this app (the Docker image installs it; locally use `pip install
+  // yt-dlp` or the release binary). See
   // docs/URL_IMPORT.md before changing YTDLP_PATH.
   YTDLP_PATH: z.string().default('yt-dlp'),
   // Metadata (-J, dump-JSON) is a single API-like call and should be
