@@ -15,7 +15,14 @@ const {
 const { buildDispatcher, buildWorkerGroups, STAGES } = require('../src/workers');
 const { migrateLegacyQueues } = require('../src/queue/legacyMigration');
 
-const own = () => connection.duplicate();
+// Every duplicated connection is tracked so afterAll can close the ones a test
+// didn't (Queue/Worker.close() don't close a connection handed to them).
+const owned = [];
+const own = () => {
+  const c = connection.duplicate();
+  owned.push(c);
+  return c;
+};
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function waitFor(fn, { timeout = 8000, step = 50 } = {}) {
@@ -32,6 +39,7 @@ async function waitFor(fn, { timeout = 8000, step = 50 } = {}) {
 
 afterAll(async () => {
   await closeAllQueues();
+  await Promise.all(owned.map((c) => c.quit().catch(() => {})));
 });
 
 describe('queue routing integrity', () => {

@@ -1,5 +1,8 @@
 jest.mock('../src/providers/ProviderResolver');
-jest.mock('../src/services/media.service');
+// Explicit factory, not a bare jest.mock(path): automocking has to load the real
+// module to learn its shape, and media.service pulls in the queue/Redis client,
+// which leaked an open Redis connection after the run.
+jest.mock('../src/services/media.service', () => ({ createMediaAssetFromLocalFile: jest.fn() }));
 const fs = require('fs/promises');
 const path = require('path');
 const { getProviderByName } = require('../src/providers/ProviderResolver');

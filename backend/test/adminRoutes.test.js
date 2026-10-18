@@ -4,6 +4,10 @@ describe('admin routes (queue observability)', () => {
   const ORIGINAL_ENV = { ...process.env };
 
   afterEach(async () => {
+    // Each test builds its own app from a freshly reset module registry, which
+    // creates its own Redis client. Close that one before the registry is reset,
+    // or it is orphaned and keeps the process alive.
+    await require('../src/redis/client').quit().catch(() => {});
     process.env = { ...ORIGINAL_ENV };
     jest.resetModules();
   });
