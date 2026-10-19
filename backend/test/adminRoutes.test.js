@@ -42,6 +42,16 @@ describe('admin routes (queue observability)', () => {
     expect(res.status).toBe(401);
   });
 
+  it.each([
+    ['a prefix of the real key', 'supersecre'],
+    ['the real key with extra characters', 'supersecretX'],
+    ['an empty header', ''],
+  ])('returns 401 for %s', async (_label, header) => {
+    const app = buildAppWithAdminKey('supersecret');
+    const res = await request(app).get('/api/v1/admin/queues').set('X-Admin-Key', header);
+    expect(res.status).toBe(401);
+  });
+
   it('returns real per-queue job counts when the key matches, reflecting an actually-enqueued job', async () => {
     const app = buildAppWithAdminKey('supersecret');
     const { enqueueVideoValidate } = require('../src/queue/producers');

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const config = require('../config');
 const AppError = require('../utils/AppError');
 
@@ -10,12 +11,24 @@ const AppError = require('../utils/AppError');
  *    match -> 401, same generic shape as the rest of the API's auth
  *    failures (no hint about which check failed).
  */
+/**
+ * Constant-time comparison. Both sides are hashed first so the buffers are always
+ * the same length (timingSafeEqual throws on unequal lengths, and checking length
+ * first would leak it), and a plain !== would leak how many leading characters
+ * of a guess were right.
+ */
+function keysMatch(provided, expected) {
+  const a = crypto.createHash('sha256').update(provided).digest();
+  const b = crypto.createHash('sha256').update(expected).digest();
+  return crypto.timingSafeEqual(a, b);
+}
+
 function requireAdminKey(req, res, next) {
   if (!config.adminApiKey) {
     return next(AppError.notFound());
   }
   const provided = req.get('x-admin-key');
-  if (!provided || provided !== config.adminApiKey) {
+  if (!provided || !keysMatch(provided, config.adminApiKey)) {
     return next(AppError.unauthorized());
   }
   return next();
