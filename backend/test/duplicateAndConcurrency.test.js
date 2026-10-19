@@ -4,8 +4,14 @@ const fs = require('fs');
 const os = require('os');
 const createApp = require('../src/app');
 const config = require('../src/config');
+const { closeAllQueues } = require('../src/queue/queues');
 
 const app = createApp();
+
+// Uploads enqueue video.validate, which opens a BullMQ queue connection nothing else closes.
+afterAll(async () => {
+  await closeAllQueues();
+});
 
 const FIXTURES_DIR = path.join(os.tmpdir(), 'contento-quota-test-fixtures');
 const SAMPLE_VIDEO = path.join(__dirname, 'fixtures', 'sample.mp4');
