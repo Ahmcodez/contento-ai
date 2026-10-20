@@ -129,7 +129,7 @@ export default function UploadDropzone({ projectId, onUploaded }) {
         aria-label="Choose a video file to upload, or drag and drop one here"
         className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed
           px-6 py-16 text-center transition-colors
-          ${isDragging ? 'border-tally bg-tally/5' : 'border-mist hover:border-steel/60'}`}
+          ${isDragging ? 'border-accent-violet bg-accent-violet/5' : 'border-mist hover:border-steel/60'}`}
       >
         <p className="text-sm font-medium text-graphite">Drag and drop your video, or click to browse</p>
         <p className="text-[12px] text-steel">MP4, MOV, MKV, or WebM · up to 500MB</p>

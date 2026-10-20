@@ -19,7 +19,7 @@ export default function Tabs({ tabs, active, onChange, className = '' }) {
             {tab.count !== undefined && (
               <span className="ml-1.5 font-mono text-[11px] tabular text-steel">{tab.count}</span>
             )}
-            {isActive && <span className="absolute inset-x-0 -bottom-px h-[2px] bg-tally" />}
+            {isActive && <span className="absolute inset-x-0 -bottom-px h-[2px] bg-graphite" />}
           </button>
         );
       })}

@@ -17,12 +17,13 @@ const STAGE_INDEX = Object.fromEntries(STAGES.map((s, i) => [s.group, i]));
  * marked done / active / pending based on the job's real stateGroup.
  */
 export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
+  const allDone = stateGroup === 'completed';
   const currentIndex = failed || cancelled ? -1 : stateGroup === 'completed' ? STAGES.length : STAGE_INDEX[stateGroup] ?? -1;
 
   return (
     <div>
       <div className="relative flex items-start justify-between">
-        <div className="absolute left-0 right-0 top-[7px] h-px bg-line-light" />
+        <div className="absolute left-0 right-0 top-[7px] h-px bg-mist" />
         {STAGES.map((stage, i) => {
           const isDone = currentIndex > i || stateGroup === 'completed';
           const isActive = i === currentIndex && !isDone;
@@ -30,9 +31,9 @@ export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
             <div key={stage.group} className="relative z-10 flex flex-col items-center gap-2" style={{ flex: 1 }}>
               <div
                 className={`h-[15px] w-[15px] rounded-full border-2 transition-colors
-                  ${isDone ? 'border-tally bg-tally' : isActive ? 'border-tally bg-white' : 'border-line-light bg-white'}`}
+                  ${isDone ? (allDone ? 'border-emerald-500 bg-emerald-500' : 'border-graphite bg-graphite') : isActive ? 'border-accent-violet bg-white' : 'border-mist bg-white'}`}
               >
-                {isActive && <span className="block h-full w-full animate-ping rounded-full bg-tally/60" />}
+                {isActive && <span className="block h-full w-full animate-ping rounded-full bg-accent-violet/60" />}
               </div>
               <span
                 className={`text-center text-[11px] font-medium leading-tight

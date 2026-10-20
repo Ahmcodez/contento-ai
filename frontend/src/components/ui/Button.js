@@ -1,7 +1,10 @@
 import { forwardRef } from 'react';
 
 const VARIANTS = {
-  primary: 'rounded-[3px] bg-tally text-white shadow-glow-sm hover:bg-tally-hover hover:shadow-glow active:bg-tally-hover',
+  // The default button. Was the old red 3px-radius "tally" style while the
+  // sidebar/landing used the gradient pill, so every screen using the default
+  // looked off-brand next to them. Now the same pill; `danger` keeps the red.
+  primary: 'rounded-full bg-brand-gradient text-white shadow-pill-glow hover:brightness-110 active:brightness-95',
   secondary: 'rounded-[3px] bg-transparent text-graphite border border-mist hover:border-steel/60 hover:bg-mist/40',
   ghost: 'rounded-[3px] bg-transparent text-steel hover:text-graphite',
   danger: 'rounded-[3px] bg-transparent text-tally border border-tally/40 hover:bg-tally/10',
@@ -25,7 +28,7 @@ const Button = forwardRef(function Button(
     <button
       ref={ref}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center gap-2 font-medium tracking-[-0.01em]
+      className={`inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium tracking-[-0.01em]
         transition-all duration-150 ease-out
         disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none
         ${VARIANTS[variant]} ${SIZES[size]} ${className}`}
