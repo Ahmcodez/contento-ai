@@ -35,8 +35,9 @@ export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
               >
                 {isActive && <span className="block h-full w-full animate-ping rounded-full bg-accent-violet/60" />}
               </div>
+              {/* Seven labels don't fit side by side on a phone; there only the current one is shown, below. */}
               <span
-                className={`text-center text-[11px] font-medium leading-tight
+                className={`hidden text-center text-[11px] font-medium leading-tight sm:block
                   ${isDone || isActive ? 'text-graphite' : 'text-steel'}`}
               >
                 {stage.label}
@@ -45,6 +46,11 @@ export default function PipelineTimeline({ stateGroup, failed, cancelled }) {
           );
         })}
       </div>
+      {!failed && !cancelled && (
+        <p className="mt-3 text-center text-[12px] font-medium text-graphite sm:hidden">
+          {allDone ? 'All steps complete' : STAGES[currentIndex]?.label}
+        </p>
+      )}
       {(failed || cancelled) && (
         <p className="mt-4 text-center text-[13px] text-steel">
           {failed ? 'Processing stopped before finishing.' : 'Processing was cancelled.'}
