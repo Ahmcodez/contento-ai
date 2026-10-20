@@ -93,7 +93,7 @@ function StageCard({ stage, index }) {
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="bg-white px-6 py-20">
+    <section id="how-it-works" className="overflow-x-clip bg-white px-6 py-20">
       <div className="mx-auto max-w-6xl">
         <div className="max-w-xl">
           <h2 className="font-jakarta text-3xl font-bold text-graphite sm:text-4xl">How it works</h2>
