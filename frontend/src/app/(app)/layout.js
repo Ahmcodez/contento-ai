@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from '@/lib/auth/AuthContext';
-import AppSidebar from '@/components/layout/AppSidebar';
+import AppShell from '@/components/layout/AppShell';
 
 function Gate({ children }) {
   const { status } = useAuth();
@@ -32,14 +32,7 @@ function Gate({ children }) {
     return null; // redirect is in flight
   }
 
-  return (
-    <div className="flex min-h-screen bg-white">
-      <AppSidebar />
-      <main className="min-w-0 flex-1 overflow-y-auto px-8 py-8">
-        <div className="mx-auto max-w-6xl">{children}</div>
-      </main>
-    </div>
-  );
+  return <AppShell>{children}</AppShell>;
 }
 
 export default function AppLayout({ children }) {

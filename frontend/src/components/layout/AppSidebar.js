@@ -26,7 +26,7 @@ const NAV_LINKS = [
   },
 ];
 
-export default function AppSidebar() {
+export default function AppSidebar({ open = false, onClose }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -37,11 +37,30 @@ export default function AppSidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-mist bg-white">
-      <div className="px-5 py-6">
+    <aside
+      id="app-sidebar"
+      // Below lg: an off-canvas drawer (invisible while closed so it is out of the
+      // tab order and hidden from screen readers). At lg: a sticky column that
+      // stays put while long pages scroll.
+      className={`fixed bottom-0 left-0 top-0 z-40 flex w-64 flex-col border-r border-mist bg-white shadow-xl
+        transition-[transform,visibility] duration-200 ease-out
+        lg:sticky lg:bottom-auto lg:z-auto lg:h-screen lg:w-60 lg:shrink-0 lg:self-start lg:translate-x-0 lg:visible lg:shadow-none
+        ${open ? 'visible translate-x-0' : 'invisible -translate-x-full'}`}
+    >
+      <div className="flex items-center justify-between px-5 py-6">
         <Link href="/dashboard" className="font-jakarta text-lg font-bold text-graphite">
           Contento
         </Link>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close menu"
+          className="-mr-2 flex h-9 w-9 items-center justify-center rounded-lg text-steel hover:bg-mist/50 hover:text-graphite lg:hidden"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path d="M4.5 4.5l9 9M13.5 4.5l-9 9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       <div className="px-3">
