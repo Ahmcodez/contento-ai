@@ -7,8 +7,9 @@ import ErrorState from '@/components/ui/ErrorState';
 import ClipCard from '@/components/ClipCard';
 import { getClips } from '@/lib/api/jobs';
 import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
+import { STOPPED_COPY } from '@/lib/jobCopy';
 
-export default function ClipsPanel({ jobId, jobIsActive }) {
+export default function ClipsPanel({ jobId, jobIsActive, jobStopped }) {
   const [clips, setClips] = useState(null);
   const [error, setError] = useState(null);
 
@@ -45,11 +46,13 @@ export default function ClipsPanel({ jobId, jobIsActive }) {
   if (clips.length === 0) {
     return (
       <EmptyState
-        title={jobIsActive ? 'Finding clips…' : 'No clip candidates'}
+        title={jobIsActive ? 'Finding clips…' : jobStopped ? STOPPED_COPY[jobStopped].title : 'No clip candidates'}
         description={
           jobIsActive
             ? 'Clip candidates show up here once analysis finishes.'
-            : 'No strong short-form moments were found in this video.'
+            : jobStopped
+              ? STOPPED_COPY[jobStopped].description
+              : 'No strong short-form moments were found in this video.'
         }
       />
     );

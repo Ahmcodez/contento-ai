@@ -8,8 +8,9 @@ import { getTranscript } from '@/lib/api/jobs';
 import { formatTimecode } from '@/lib/format';
 import { ApiError } from '@/lib/api/client';
 import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
+import { STOPPED_COPY } from '@/lib/jobCopy';
 
-export default function TranscriptPanel({ jobId, jobIsActive }) {
+export default function TranscriptPanel({ jobId, jobIsActive, jobStopped }) {
   const [transcript, setTranscript] = useState(null);
   const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState(null);
@@ -43,8 +44,12 @@ export default function TranscriptPanel({ jobId, jobIsActive }) {
   if (notReady) {
     return (
       <EmptyState
-        title="Transcript not ready yet"
-        description="This shows up once the audio has been transcribed. It usually takes a minute or two after upload."
+        title={jobStopped ? STOPPED_COPY[jobStopped].title : 'Transcript not ready yet'}
+        description={
+          jobStopped
+            ? STOPPED_COPY[jobStopped].description
+            : 'This shows up once the audio has been transcribed. It usually takes a minute or two after upload.'
+        }
       />
     );
   }

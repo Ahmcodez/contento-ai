@@ -8,6 +8,7 @@ import ErrorState from '@/components/ui/ErrorState';
 import ContentEditor from '@/components/ContentEditor';
 import { getContent } from '@/lib/api/jobs';
 import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
+import { STOPPED_COPY } from '@/lib/jobCopy';
 
 const CONTENT_TABS = [
   { id: 'blog', label: 'Blog' },
@@ -17,7 +18,7 @@ const CONTENT_TABS = [
   { id: 'youtube_description', label: 'YouTube' },
 ];
 
-export default function ContentPanel({ jobId, jobIsActive }) {
+export default function ContentPanel({ jobId, jobIsActive, jobStopped }) {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('blog');
@@ -58,11 +59,13 @@ export default function ContentPanel({ jobId, jobIsActive }) {
   if (items.length === 0) {
     return (
       <EmptyState
-        title={jobIsActive ? 'Writing content…' : 'No content generated'}
+        title={jobIsActive ? 'Writing content…' : jobStopped ? STOPPED_COPY[jobStopped].title : 'No content generated'}
         description={
           jobIsActive
             ? 'Blog, LinkedIn, X, Instagram, and YouTube copy show up here once generated.'
-            : 'Written content wasn\u2019t generated for this video.'
+            : jobStopped
+              ? STOPPED_COPY[jobStopped].description
+              : 'Written content wasn\u2019t generated for this video.'
         }
       />
     );
