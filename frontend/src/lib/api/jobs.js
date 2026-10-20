@@ -13,6 +13,15 @@ export async function cancelJob(jobId) {
   return apiRequest(`/api/v1/jobs/${jobId}/cancel`, { method: 'POST' });
 }
 
+/**
+ * Resumes a FAILED job from the stage it failed in (finished work isn't redone).
+ * Rejects with an ApiError: 409 NOT_RETRYABLE (not failed, or the video was
+ * rejected at validation), 429 if the account is at its concurrent-job limit.
+ */
+export async function retryJob(jobId) {
+  return apiRequest(`/api/v1/jobs/${jobId}/retry`, { method: 'POST' });
+}
+
 export async function getTranscript(jobId) {
   // Throws ApiError with code NOT_READY (409) if not transcribed yet —
   // callers should handle that as a normal in-progress state, not an error.
@@ -33,8 +42,3 @@ export async function regenerateContent(jobId, contentType) {
   const data = await apiRequest(`/api/v1/jobs/${jobId}/content/${contentType}/regenerate`, { method: 'POST' });
   return data.content;
 }
-
-// NOTE: there is no POST /jobs/:id/retry endpoint yet. A failed job
-// cannot currently be retried from the UI — see JobStatusPanel, which
-// surfaces this honestly instead of showing a retry button that does
-// nothing.

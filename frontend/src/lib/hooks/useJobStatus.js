@@ -14,6 +14,7 @@ export function useJobStatus(jobId, { intervalMs = 3000 } = {}) {
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pollEpoch, setPollEpoch] = useState(0);
   const timerRef = useRef(null);
 
   const fetchOnce = useCallback(async () => {
@@ -77,7 +78,11 @@ export function useJobStatus(jobId, { intervalMs = 3000 } = {}) {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [jobId, intervalMs, fetchOnce]);
+  }, [jobId, intervalMs, fetchOnce, pollEpoch]);
 
-  return { job, error, loading, isTerminal: job ? TERMINAL_STATES.has(job.state) : false, refetch: fetchOnce };
+  // Polling stops for good once a job is terminal, so after something moves it
+  // back to active (a retry) the loop has to be started again.
+  const restart = useCallback(() => setPollEpoch((n) => n + 1), []);
+
+  return { job, error, loading, isTerminal: job ? TERMINAL_STATES.has(job.state) : false, refetch: fetchOnce, restart };
 }
