@@ -55,9 +55,33 @@ function buildTimedLines(segments) {
 
 const formatLine = (line) => `[${line.id}] ${line.text}`;
 
-/** The prompt form: one "[id] text" per line. */
-function formatTimedLines(lines) {
-  return lines.map(formatLine).join('\n');
+function formatClock(ms) {
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+}
+
+/**
+ * The prompt form: one "[id] text" per line. With markEveryMs, a "-- m:ss --"
+ * line is dropped in roughly each interval so the model can judge how long a span
+ * of lines is without being given a timestamp on every line (about 3% extra tokens
+ * at one marker a minute, versus around 10% for per-line times).
+ */
+function formatTimedLines(lines, { markEveryMs = 0 } = {}) {
+  if (!markEveryMs) return lines.map(formatLine).join('\n');
+
+  const out = [];
+  let nextMark = markEveryMs;
+  for (const line of lines) {
+    if (line.startMs >= nextMark) {
+      out.push(`-- ${formatClock(line.startMs)} --`);
+      nextMark = (Math.floor(line.startMs / markEveryMs) + 1) * markEveryMs;
+    }
+    out.push(formatLine(line));
+  }
+  return out.join('\n');
 }
 
 /**
@@ -65,7 +89,7 @@ function formatTimedLines(lines) {
  * formatted text, since that is what is sent). Line ids stay global, so a model
  * reading chunk 3 still answers in ids that mean something for the whole video.
  */
-function chunkTimedLines(lines, { maxCharsPerChunk, maxChunks }) {
+function chunkTimedLines(lines, { maxCharsPerChunk, maxChunks, markEveryMs = 60000 }) {
   if (lines.length === 0) return [];
 
   const chunks = [];
@@ -76,7 +100,7 @@ function chunkTimedLines(lines, { maxCharsPerChunk, maxChunks }) {
     if (current.length === 0) return;
     chunks.push({
       lines: current,
-      text: formatTimedLines(current),
+      text: formatTimedLines(current, { markEveryMs }),
       startMs: current[0].startMs,
       endMs: current[current.length - 1].endMs,
     });
@@ -161,4 +185,4 @@ function locatePhraseStartMs(lines, phrase, { matchWords = 3 } = {}) {
   return null;
 }
 
-module.exports = { buildTimedLines, formatTimedLines, chunkTimedLines, resolveLineSpan, locatePhraseStartMs, normalizeToken };
+module.exports = { buildTimedLines, formatTimedLines, formatClock, chunkTimedLines, resolveLineSpan, locatePhraseStartMs, normalizeToken };

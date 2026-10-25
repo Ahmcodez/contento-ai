@@ -37,11 +37,37 @@ describe('formatTimedLines', () => {
   });
 });
 
+describe('time markers', () => {
+  const mk = (i, ms) => ({ id: i, startMs: ms, endMs: ms + 1000, text: `line ${i}`, words: [] });
+
+  it('drops a marker about every interval, labelled with the real time of the line after it', () => {
+    const lines = [mk(0, 0), mk(1, 20000), mk(2, 61000), mk(3, 70000), mk(4, 125500), mk(5, 3725000)];
+    expect(formatTimedLines(lines, { markEveryMs: 60000 }).split('\n')).toEqual([
+      '[0] line 0',
+      '[1] line 1',
+      '-- 1:01 --',
+      '[2] line 2',
+      '[3] line 3',
+      '-- 2:05 --',
+      '[4] line 4',
+      '-- 1:02:05 --',
+      '[5] line 5',
+    ]);
+  });
+
+  it('adds only a few percent to the size of a realistic transcript', () => {
+    const lines = Array.from({ length: 600 }, (_, i) => mk(i, i * 12000)).map((l) => ({ ...l, text: 'word '.repeat(22).trim() }));
+    const plain = formatTimedLines(lines).length;
+    const marked = formatTimedLines(lines, { markEveryMs: 60000 }).length;
+    expect((marked - plain) / plain).toBeLessThan(0.05);
+  });
+});
+
 describe('chunkTimedLines', () => {
   const lines = Array.from({ length: 10 }, (_, i) => ({ id: i, startMs: i * 1000, endMs: i * 1000 + 900, text: 'x'.repeat(50), words: [] }));
 
   it('splits by size while keeping ids global and boundaries exact', () => {
-    const chunks = chunkTimedLines(lines, { maxCharsPerChunk: 200, maxChunks: 10 });
+    const chunks = chunkTimedLines(lines, { maxCharsPerChunk: 200, maxChunks: 10, markEveryMs: 0 });
     expect(chunks.length).toBeGreaterThan(1);
     expect(chunks.flatMap((c) => c.lines.map((l) => l.id))).toEqual(lines.map((l) => l.id));
     for (const c of chunks) {

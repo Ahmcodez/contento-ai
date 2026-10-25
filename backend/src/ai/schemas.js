@@ -1,9 +1,30 @@
 const { z } = require('zod');
 
+// Places in the transcript are referred to by line id (see src/transcript/timed.js),
+// never by time: the model is shown ids, not timestamps, and code maps ids to the real
+// times afterwards. startMs/endMs stay optional only so older stored analyses still parse.
 const timestampedItem = z.object({
   text: z.string().min(1),
+  startLine: z.number().int().nonnegative().optional(),
+  endLine: z.number().int().nonnegative().optional(),
   startMs: z.number().nonnegative().optional(),
   endMs: z.number().nonnegative().optional(),
+});
+
+/**
+ * One proposed short-form clip, as line ids: startLine is where the HOOK is first
+ * spoken, endLine is where that topic's explanation finishes. The hook text is
+ * required (see the note on clipCandidatesSchema.hook for why).
+ */
+const clipProposalSchema = z.object({
+  startLine: z.number().int().nonnegative(),
+  endLine: z.number().int().nonnegative().optional(),
+  hook: z.string().min(5).max(500),
+  title: z.string().min(1).max(200),
+  summary: z.string().max(1000).optional(),
+  reason: z.string().max(500).optional(),
+  topic: z.string().max(200).optional(),
+  score: z.number().min(0).max(100).optional(),
 });
 
 /**
@@ -23,22 +44,45 @@ const contentAnalysisSchema = z.object({
   conclusions: z.array(timestampedItem).default([]),
   memorableQuotes: z.array(timestampedItem).default([]),
   selfContainedIdeas: z.array(timestampedItem).default([]),
+  clips: z.array(clipProposalSchema).default([]),
 });
+
+const ITEM_JSON = {
+  type: 'array',
+  items: { type: 'object', properties: { text: { type: 'string' }, startLine: { type: 'integer' }, endLine: { type: 'integer' } }, required: ['text'] },
+};
 
 const CONTENT_ANALYSIS_JSON_SCHEMA = {
   type: 'object',
   properties: {
     summary: { type: 'string' },
     topics: { type: 'array', items: { type: 'string' } },
-    keyPoints: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    stories: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    strongOpinions: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    educationalMoments: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    surprisingStatements: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    questions: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    conclusions: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    memorableQuotes: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
-    selfContainedIdeas: { type: 'array', items: { type: 'object', properties: { text: { type: 'string' }, startMs: { type: 'number' }, endMs: { type: 'number' } } } },
+    keyPoints: ITEM_JSON,
+    stories: ITEM_JSON,
+    strongOpinions: ITEM_JSON,
+    educationalMoments: ITEM_JSON,
+    surprisingStatements: ITEM_JSON,
+    questions: ITEM_JSON,
+    conclusions: ITEM_JSON,
+    memorableQuotes: ITEM_JSON,
+    selfContainedIdeas: ITEM_JSON,
+    clips: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          startLine: { type: 'integer' },
+          endLine: { type: 'integer' },
+          hook: { type: 'string' },
+          title: { type: 'string' },
+          summary: { type: 'string' },
+          reason: { type: 'string' },
+          topic: { type: 'string' },
+          score: { type: 'number' },
+        },
+        required: ['startLine', 'endLine', 'hook', 'title'],
+      },
+    },
   },
   required: ['summary', 'topics'],
 };
@@ -99,6 +143,7 @@ const CLIP_CANDIDATES_JSON_SCHEMA = {
 module.exports = {
   contentAnalysisSchema,
   CONTENT_ANALYSIS_JSON_SCHEMA,
+  clipProposalSchema,
   clipCandidatesSchema,
   CLIP_CANDIDATES_JSON_SCHEMA,
 };

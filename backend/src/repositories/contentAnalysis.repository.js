@@ -15,6 +15,7 @@ async function create({ processingJobId, analysis, aiProvider, rawAiResponse }) 
       conclusions: JSON.stringify(analysis.conclusions || []),
       memorable_quotes: JSON.stringify(analysis.memorableQuotes || []),
       self_contained_ideas: JSON.stringify(analysis.selfContainedIdeas || []),
+      clip_proposals: JSON.stringify(analysis.clips || []),
       raw_ai_response: rawAiResponse ? JSON.stringify(rawAiResponse) : null,
       ai_provider: aiProvider,
     })

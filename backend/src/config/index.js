@@ -128,8 +128,11 @@ const envSchema = z.object({
   MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
   MAX_PROCESSING_MINUTES_PER_USER_PER_MONTH: z.coerce.number().int().positive().default(300),
 
-  MAX_TRANSCRIPT_CHARS_PER_AI_CALL: z.coerce.number().int().positive().default(12000),
-  MAX_TRANSCRIPT_CHUNKS: z.coerce.number().int().positive().default(8),
+  // Larger chunks mean fewer AI calls (each repeats the instructions, and calls are what the
+  // per-minute / per-day API limits count). 30k chars x 12 chunks covers ~7h of speech, so a
+  // 4-hour video (MAX_VIDEO_DURATION_SECONDS) is no longer rejected at ~100 minutes.
+  MAX_TRANSCRIPT_CHARS_PER_AI_CALL: z.coerce.number().int().positive().default(30000),
+  MAX_TRANSCRIPT_CHUNKS: z.coerce.number().int().positive().default(12),
   MAX_AI_CALLS_PER_JOB: z.coerce.number().int().positive().default(20),
   MAX_GENERATED_CONTENT_TYPES: z.coerce.number().int().positive().default(5),
   AI_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),

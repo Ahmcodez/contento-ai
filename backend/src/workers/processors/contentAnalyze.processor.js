@@ -22,7 +22,14 @@ async function processContentAnalyze(job) {
 
   let analysis;
   try {
-    analysis = await contentAnalysisService.analyzeTranscript({ provider, transcript, userId, processingJobId });
+    const jobRow = await db('processing_jobs').where({ id: processingJobId }).first();
+    analysis = await contentAnalysisService.analyzeTranscript({
+      provider,
+      transcript,
+      userId,
+      processingJobId,
+      requestedClipCount: jobRow.requested_clip_count || undefined,
+    });
   } catch (err) {
     if (err instanceof AIProviderError && !err.retryable) {
       await processingJobRepository.transitionState(processingJobId, {
@@ -43,7 +50,7 @@ async function processContentAnalyze(job) {
     fromState: 'ANALYZING',
     toState: 'ANALYZED',
     progressPercent: 55,
-    metadata: { topicCount: analysis.topics?.length || 0 },
+    metadata: { topicCount: analysis.topics?.length || 0, clipProposalCount: analysis.clips?.length || 0 },
   });
 
   // Written-content generation is chained after clip rendering rather
