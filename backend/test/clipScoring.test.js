@@ -190,7 +190,7 @@ describe('processClipCandidates (full pipeline)', () => {
       title: `clip ${i}`,
     }));
     const result = processClipCandidates(raw, { transcript, durationMs: 30000 });
-    expect(result.length).toBeLessThanOrEqual(10); // MAX_CLIPS_PER_VIDEO default
+    expect(result.length).toBeLessThanOrEqual(require('../src/config').limits.maxClipsPerVideo);
   });
 
   it('drops candidates entirely outside the valid video duration', () => {

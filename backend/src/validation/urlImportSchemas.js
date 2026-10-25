@@ -15,9 +15,15 @@ const pasteUrlBody = z.object({
       .max(2048, 'URL is too long')
       .url('Not a valid URL')
       .refine((value) => value.startsWith('http://') || value.startsWith('https://'), 'Only http and https URLs are supported'),
+    // Range-checked against MAX_CLIPS_PER_VIDEO in the service (resolveClipCount).
+    clipCount: z.coerce.number().int().optional(),
   }),
+});
+
+const confirmImportBody = z.object({
+  body: z.object({ clipCount: z.coerce.number().int().optional() }).default({}),
 });
 
 const mediaImportIdParam = z.object({ params: z.object({ mediaImportId: z.string().uuid() }) });
 
-module.exports = { pasteUrlBody, mediaImportIdParam };
+module.exports = { pasteUrlBody, confirmImportBody, mediaImportIdParam };

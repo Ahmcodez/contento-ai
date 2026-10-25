@@ -10,7 +10,7 @@ const config = require('../config');
 const redis = require('../redis/client');
 const { idParam } = require('../validation/projectSchemas');
 const { mediaIdParam } = require('../validation/uploadSchemas');
-const { pasteUrlBody, mediaImportIdParam } = require('../validation/urlImportSchemas');
+const { pasteUrlBody, confirmImportBody, mediaImportIdParam } = require('../validation/urlImportSchemas');
 
 const router = express.Router();
 
@@ -54,6 +54,6 @@ router.get('/media/:mediaAssetId', requireAuth, validate(mediaIdParam), controll
 
 router.post('/projects/:id/media/url', requireAuth, urlImportLimiter, validate(idParam), validate(pasteUrlBody), controller.createUrlImport);
 router.get('/media-imports/:mediaImportId', requireAuth, validate(mediaImportIdParam), controller.getUrlImport);
-router.post('/media-imports/:mediaImportId/confirm', requireAuth, validate(mediaImportIdParam), controller.confirmUrlImport);
+router.post('/media-imports/:mediaImportId/confirm', requireAuth, validate(mediaImportIdParam), validate(confirmImportBody), controller.confirmUrlImport);
 
 module.exports = router;

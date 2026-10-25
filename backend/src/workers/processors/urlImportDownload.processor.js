@@ -86,6 +86,7 @@ module.exports = async function processUrlImportDownload(job) {
       mediaImport.requested_by,
       actualPath,
       {
+        clipCount: mediaImport.requested_clip_count,
         displayName: mediaImport.title || `${mediaImport.provider || 'video'}-import`,
         sourceMetadata: {
           provider: mediaImport.provider,

@@ -1,3 +1,5 @@
+const db = require('../db/client');
+const { resolveClipCount } = require('../utils/clipCount');
 const AppError = require('../utils/AppError');
 const projectRepository = require('../repositories/project.repository');
 const mediaImportRepository = require('../repositories/mediaImport.repository');
@@ -23,6 +25,7 @@ function serialize(row) {
     height: row.height,
     mediaAssetId: row.media_asset_id,
     processingJobId: row.processing_job_id,
+    requestedClipCount: row.requested_clip_count,
     errorMessage: row.error_message,
     failureStage: row.failure_stage,
     createdAt: row.created_at,
@@ -39,14 +42,17 @@ function serialize(row) {
  * so this returns immediately rather than making the user's request
  * wait on a network round-trip to their pasted URL.
  */
-async function createImport(userId, projectId, sourceUrl) {
+async function createImport(userId, projectId, sourceUrl, clipCount) {
   const workspaceIds = await workspaceService.getWorkspaceIdsForUser(userId);
   const project = await projectRepository.findByIdForWorkspaces(projectId, workspaceIds);
   if (!project) {
     throw AppError.notFound('Project not found');
   }
 
-  const mediaImport = await mediaImportRepository.create({ projectId, requestedBy: userId, sourceUrl });
+  // Validated now so a bad value fails the request, not a queued job later. Left null
+  // when not given: the default is applied (and can still be changed) at confirm time.
+  const requestedClipCount = clipCount === undefined || clipCount === null ? null : resolveClipCount(clipCount);
+  const mediaImport = await mediaImportRepository.create({ projectId, requestedBy: userId, sourceUrl, requestedClipCount });
   await enqueueUrlImportResolve({ mediaImportId: mediaImport.id });
   return serialize(mediaImport);
 }
@@ -77,7 +83,7 @@ async function getImport(userId, mediaImportId) {
  * quota check because time may have passed (and other jobs may have
  * run) between the preview being shown and the user clicking confirm.
  */
-async function confirmImport(userId, mediaImportId) {
+async function confirmImport(userId, mediaImportId, clipCount) {
   const workspaceIds = await workspaceService.getWorkspaceIdsForUser(userId);
   const mediaImport = await mediaImportRepository.findByIdScoped(mediaImportId, workspaceIds);
   if (!mediaImport) {
@@ -88,6 +94,12 @@ async function confirmImport(userId, mediaImportId) {
       `This import is in "${mediaImport.state}" state and cannot be confirmed right now`,
       'NOT_READY',
     );
+  }
+
+  // The preview has just shown the video's length, so this is the natural moment to
+  // choose how many clips; it overrides whatever was set when the URL was pasted.
+  if (clipCount !== undefined && clipCount !== null) {
+    await db('media_imports').where({ id: mediaImportId }).update({ requested_clip_count: resolveClipCount(clipCount) });
   }
 
   await quotaService.assertCanStartNewJob(userId);

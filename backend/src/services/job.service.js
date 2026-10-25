@@ -38,6 +38,7 @@ function serializeJob(job) {
     state: job.state,
     stateGroup: STATE_GROUPS[job.state] || 'unknown',
     progressPercent: job.progress_percent,
+    requestedClipCount: job.requested_clip_count,
     failureStage: job.failure_stage,
     errorMessage: job.error_message,
     createdAt: job.created_at,

@@ -102,7 +102,9 @@ const envSchema = z.object({
   // YTDLP_DOWNLOAD_TIMEOUT_MS are the real ceilings on how long a single
   // stage may run — raise those too if you regularly process longer audio.
   MAX_VIDEO_DURATION_SECONDS: z.coerce.number().int().positive().default(4 * 3600),
-  MAX_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(10),
+  // The most clips a user may ask for on one video, and the default when they don't say.
+  MAX_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(20),
+  DEFAULT_CLIPS_PER_VIDEO: z.coerce.number().int().positive().default(5),
   // Clips within one job render through a bounded-concurrency pool, not
   // fully sequentially: at up to 10 clips/video and ~36s/clip (see
   // FFMPEG_PRESET above), fully sequential rendering means a video with
@@ -352,6 +354,7 @@ function loadConfig() {
       maxUploadSizeMb: env.MAX_UPLOAD_SIZE_MB,
       maxVideoDurationSeconds: env.MAX_VIDEO_DURATION_SECONDS,
       maxClipsPerVideo: env.MAX_CLIPS_PER_VIDEO,
+      defaultClipsPerVideo: env.DEFAULT_CLIPS_PER_VIDEO,
       clipRenderConcurrencyPerJob: env.CLIP_RENDER_CONCURRENCY_PER_JOB,
       maxAiRequestsPerUserPerDay: env.MAX_AI_REQUESTS_PER_USER_PER_DAY,
       maxTotalAiRequestsPerDay: env.MAX_TOTAL_AI_REQUESTS_PER_DAY,

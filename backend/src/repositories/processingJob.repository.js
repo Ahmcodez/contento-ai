@@ -2,9 +2,11 @@ const db = require('../db/client');
 
 const TABLE = 'processing_jobs';
 
-async function create(trx, { mediaAssetId, state = 'UPLOADING' }) {
+async function create(trx, { mediaAssetId, state = 'UPLOADING', requestedClipCount = null }) {
   const query = trx || db;
-  const [job] = await query(TABLE).insert({ media_asset_id: mediaAssetId, state }).returning('*');
+  const [job] = await query(TABLE)
+    .insert({ media_asset_id: mediaAssetId, state, requested_clip_count: requestedClipCount })
+    .returning('*');
   await query('processing_job_events').insert({
     processing_job_id: job.id,
     from_state: null,

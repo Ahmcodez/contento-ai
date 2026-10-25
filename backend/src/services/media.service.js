@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { ulid } = require('ulid');
 
 const db = require('../db/client');
+const { resolveClipCount } = require('../utils/clipCount');
 const AppError = require('../utils/AppError');
 const { sanitizeDisplayFilename, extensionFromFilename } = require('../utils/sanitize');
 const { detectVideoContainer } = require('../utils/detectVideoContainer');
@@ -42,7 +43,8 @@ async function computeChecksum(filePath) {
  * for that flow. Left undefined, every field defaults exactly as it did
  * before URL import existed (source_type: 'upload').
  */
-async function createMediaAssetFromLocalFile(projectId, userId, filePath, { displayName, sourceMetadata } = {}) {
+async function createMediaAssetFromLocalFile(projectId, userId, filePath, { displayName, sourceMetadata, clipCount } = {}) {
+  const requestedClipCount = resolveClipCount(clipCount);
   const detected = await detectVideoContainer(filePath);
   const detectedMime = detected?.mime;
   if (!detectedMime || !ALLOWED_MIME_TYPES.has(detectedMime)) {
@@ -95,6 +97,7 @@ async function createMediaAssetFromLocalFile(projectId, userId, filePath, { disp
     const job = await processingJobRepository.create(trx, {
       mediaAssetId: asset.id,
       state: 'UPLOADED',
+      requestedClipCount,
     });
 
     return { mediaAsset: asset, processingJob: job };
@@ -105,7 +108,7 @@ async function createMediaAssetFromLocalFile(projectId, userId, filePath, { disp
   return { mediaAsset, processingJob };
 }
 
-async function uploadMedia(userId, projectId, file) {
+async function uploadMedia(userId, projectId, file, { clipCount } = {}) {
   if (!file) {
     throw AppError.badRequest('No file uploaded', 'FILE_REQUIRED');
   }
@@ -128,7 +131,7 @@ async function uploadMedia(userId, projectId, file) {
       throw AppError.unsupportedMediaType(`File extension "${ext}" is not supported`);
     }
 
-    return await createMediaAssetFromLocalFile(projectId, userId, file.path, { displayName: originalName });
+    return await createMediaAssetFromLocalFile(projectId, userId, file.path, { displayName: originalName, clipCount });
   } finally {
     // On any failure after the file landed in storage/DB we still want the
     // temp upload cleaned up; a partially-created storage object without a

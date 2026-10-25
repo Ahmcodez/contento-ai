@@ -3,7 +3,9 @@ const urlImportService = require('../services/urlImport.service');
 const asyncHandler = require('../utils/asyncHandler');
 
 const upload = asyncHandler(async (req, res) => {
-  const { mediaAsset, processingJob } = await mediaService.uploadMedia(req.user.id, req.params.id, req.file);
+  const { mediaAsset, processingJob } = await mediaService.uploadMedia(req.user.id, req.params.id, req.file, {
+    clipCount: req.body?.clipCount,
+  });
   res.status(202).json({
     mediaAsset: { id: mediaAsset.id, status: mediaAsset.status },
     processingJob: { id: processingJob.id, state: processingJob.state },
@@ -25,7 +27,7 @@ const getOne = asyncHandler(async (req, res) => {
 });
 
 const createUrlImport = asyncHandler(async (req, res) => {
-  const mediaImport = await urlImportService.createImport(req.user.id, req.params.id, req.body.url);
+  const mediaImport = await urlImportService.createImport(req.user.id, req.params.id, req.body.url, req.body.clipCount);
   res.status(202).json({ mediaImport });
 });
 
@@ -35,7 +37,7 @@ const getUrlImport = asyncHandler(async (req, res) => {
 });
 
 const confirmUrlImport = asyncHandler(async (req, res) => {
-  const mediaImport = await urlImportService.confirmImport(req.user.id, req.params.mediaImportId);
+  const mediaImport = await urlImportService.confirmImport(req.user.id, req.params.mediaImportId, req.body?.clipCount);
   res.status(200).json({ mediaImport });
 });
 

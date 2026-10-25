@@ -2,9 +2,15 @@ const db = require('../db/client');
 
 const TABLE = 'media_imports';
 
-async function create({ projectId, requestedBy, sourceUrl, state = 'DETECTING_PROVIDER' }) {
+async function create({ projectId, requestedBy, sourceUrl, requestedClipCount = null, state = 'DETECTING_PROVIDER' }) {
   const [row] = await db(TABLE)
-    .insert({ project_id: projectId, requested_by: requestedBy, source_url: sourceUrl, state })
+    .insert({
+      project_id: projectId,
+      requested_by: requestedBy,
+      source_url: sourceUrl,
+      requested_clip_count: requestedClipCount,
+      state,
+    })
     .returning('*');
   await db('media_import_events').insert({ media_import_id: row.id, from_state: null, to_state: state });
   return row;
