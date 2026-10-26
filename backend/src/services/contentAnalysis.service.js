@@ -3,6 +3,7 @@ const { buildTimedLines, chunkTimedLines, resolveLineSpan } = require('../transc
 const { contentAnalysisSchema, CONTENT_ANALYSIS_JSON_SCHEMA } = require('../ai/schemas');
 const { callStructured } = require('../ai/reliableCall');
 const { UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT, delimitTranscript } = require('../ai/promptSafety');
+const { clipProposalInstructions } = require('../clips/prompt');
 const contentAnalysisRepository = require('../repositories/contentAnalysis.repository');
 
 const CATEGORY_FIELDS = [
@@ -38,19 +39,13 @@ function proposalQuota({ requestedClipCount, chunkDurationMs, totalDurationMs })
 }
 
 function buildPrompt(chunkText, { quota }) {
-  const { clipMinDurationSeconds: minSec, clipMaxDurationSeconds: maxSec } = config.limits;
   return `Analyze this portion of a video transcript in depth.
 
 Each line starts with its id in square brackets, like [412]. Lines like "-- 3:05 --" are time markers, not speech. Refer to places in the transcript ONLY by these ids (startLine / endLine), never by time.
 
 Identify, most significant first and at most ${MAX_ITEMS_PER_CATEGORY} per category: key topics (short strings), key points, stories told, strong opinions, educational moments, surprising statements, questions raised, conclusions reached, memorable quotes, and self-contained ideas. Give each item the startLine and endLine where it is said. Also write a one-paragraph summary of just this portion.
 
-Then propose up to ${quota} short-form clip${quota === 1 ? '' : 's'} (for TikTok, Reels and Shorts, where a viewer decides within 1-3 seconds whether to keep watching). Each clip is ONE topic and must:
-- START at the line where the HOOK is first spoken: a line that grabs attention by itself, such as a surprising or counterintuitive claim, a question the viewer wants answered, a concrete number up front, a consequence stated before its explanation, or direct address to the viewer's situation. Do not start on lead-up, throat-clearing, or a transition ("so anyway", "today I want to talk about"). If the hook line comes a few lines after the topic begins, startLine is the hook line, not the lead-up.
-- RUN THROUGH the line where that topic's explanation is complete, ending on a real conclusion, so it makes sense without outside context. endLine is that last line.
-- Last roughly ${minSec}-${maxSec} seconds of speech (use the time markers to judge).
-- Not overlap another proposed clip; each covers a different topic.
-"hook" is the opening words exactly as spoken at startLine, verbatim, not a paraphrase or a title. "score" is 0-100 for how likely the clip is to hold viewers.
+Then: ${clipProposalInstructions(quota)}
 
 Transcript portion:
 ${delimitTranscript(chunkText)}`;

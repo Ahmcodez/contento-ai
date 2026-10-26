@@ -149,6 +149,9 @@ const envSchema = z.object({
   QUEUE_AI_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
   QUEUE_AI_RATE_LIMIT_DURATION_MS: z.coerce.number().int().positive().default(60 * 1000),
 
+  // Clips scoring under this (0-100, see src/clips/scoring.js) are never made, even if that
+  // means fewer than the number asked for: padding with weak clips is worse than fewer good ones.
+  CLIP_MIN_FINAL_SCORE: z.coerce.number().min(0).max(100).default(30),
   CLIP_MIN_DURATION_SECONDS: z.coerce.number().int().positive().default(15),
   CLIP_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(90),
 
@@ -369,6 +372,7 @@ function loadConfig() {
       maxAiCallsPerJob: env.MAX_AI_CALLS_PER_JOB,
       maxGeneratedContentTypes: env.MAX_GENERATED_CONTENT_TYPES,
       aiRetryAttempts: env.AI_RETRY_ATTEMPTS,
+      clipMinFinalScore: env.CLIP_MIN_FINAL_SCORE,
       clipMinDurationSeconds: env.CLIP_MIN_DURATION_SECONDS,
       clipMaxDurationSeconds: env.CLIP_MAX_DURATION_SECONDS,
     },

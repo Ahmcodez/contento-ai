@@ -1,114 +1,83 @@
-const { clipCandidatesSchema, CLIP_CANDIDATES_JSON_SCHEMA } = require('../ai/schemas');
+const config = require('../config');
+const { clipProposalsSchema, CLIP_PROPOSALS_JSON_SCHEMA } = require('../ai/schemas');
 const { callStructured } = require('../ai/reliableCall');
 const { UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT, delimitTranscript } = require('../ai/promptSafety');
-const { processClipCandidates } = require('../clips/candidates');
+const { clipProposalInstructions } = require('../clips/prompt');
+const { buildCandidates, selectClips } = require('../clips/select');
+const { buildTimedLines, chunkTimedLines, resolveLineSpan } = require('../transcript/timed');
+const { proposalQuota } = require('./contentAnalysis.service');
 const clipCandidateRepository = require('../repositories/clipCandidate.repository');
 
-function formatTimestampMs(ms) {
-  if (ms === undefined || ms === null) return null;
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+function buildFallbackPrompt(chunkText, { quota }) {
+  return `Find the best short-form clips in this portion of a video transcript.
+
+Each line starts with its id in square brackets, like [412]. Lines like "-- 3:05 --" are time markers, not speech. Refer to places in the transcript ONLY by these ids (startLine / endLine), never by time.
+
+${clipProposalInstructions(quota)}
+
+Transcript portion:
+${delimitTranscript(chunkText)}`;
 }
 
 /**
- * Formats one analysis category (stories, memorableQuotes, etc.) as a
- * compact, timestamped bullet list for the prompt. Capped per category
- * (default 12) — content-analyze's own schema places no limit on how
- * many items it returns, and a long podcast can plausibly yield dozens;
- * without a cap, this prompt (and its token cost) would grow unbounded
- * with source length instead of staying roughly flat.
+ * Last resort: ask the model for clip proposals directly. Used only when the analysis
+ * pass left none (an analysis stored before proposals existed, or a model that returned
+ * an empty list). Costs one more pass over the transcript, which is exactly what the
+ * normal path avoids, so it is deliberately not the default.
  */
-function formatSignalList(items, { cap = 12 } = {}) {
-  if (!items || items.length === 0) return null;
-  return items
-    .slice(0, cap)
-    .map((item) => {
-      const ts = formatTimestampMs(item.startMs);
-      return ts ? `- [${ts}] ${item.text}` : `- ${item.text}`;
-    })
-    .join('\n');
-}
-
-/**
- * Real gap this closes: content-analyze already extracts stories,
- * memorable quotes, surprising statements and strong opinions into
- * structured, timestamped fields (contentAnalysis.repository.js) — one
- * Gemini call's worth of work — but clip detection previously only saw
- * `summary` and `topics`, discarding all of it. These four categories are
- * the most directly load-bearing for "hook + story" clips that have a
- * real shot at retention, so they're surfaced here as concrete anchors
- * the model can build a clip span around, instead of re-deriving them
- * from scratch by re-reading the full transcript.
- */
-function formatAnalysisSignals(analysis) {
-  const sections = [
-    ['Notable stories/anecdotes', formatSignalList(analysis.stories)],
-    ['Memorable quotes', formatSignalList(analysis.memorableQuotes)],
-    ['Surprising statements', formatSignalList(analysis.surprisingStatements)],
-    ['Strong opinions/hot takes', formatSignalList(analysis.strongOpinions)],
-  ].filter(([, list]) => list);
-
-  if (sections.length === 0) return '';
-  return `\n\n${sections.map(([label, list]) => `${label}:\n${list}`).join('\n\n')}`;
-}
-
-function buildPrompt(transcript, analysis) {
-  const topicsLine = (analysis.topics || []).join(', ');
-  const signalsBlock = formatAnalysisSignals(analysis);
-  return `Given this video transcript and its analysis, identify 3-10 potential short-form clip moments optimized for retention on platforms like TikTok, Reels and Shorts, where a viewer decides whether to keep watching within the first 1-3 seconds.
-
-A clip built around a real story, a surprising statement, a bold opinion, or a memorable quote almost always outperforms a clip that only explains a topic — prefer anchoring clips on the specific moments listed below (when present) over generic topic explanation. Each listed moment includes its approximate timestamp as a starting reference point; use it to locate the real startMs/endMs span in the transcript (the listed timestamp may not be the ideal clip boundary itself).${signalsBlock}
-
-For each clip, choose a startMs/endMs span where the FIRST THING SAID is itself a hook — do not pick a span whose opening line is throat-clearing, a transition ("so anyway"), or a restatement of something said earlier. If the strongest hook line in a segment comes a few seconds after where the idea technically begins, move the clip's start to that line rather than including the lead-up.
-
-The "hook" field must be the literal opening words a viewer will hear, verbatim from the transcript — not a paraphrase or a title. A strong hook is usually one of:
-- a direct, specific claim that sounds surprising or counterintuitive ("Most people get this backwards")
-- a question the viewer wants answered ("Why does this always happen right before...")
-- a concrete number or stat stated up front ("Three things killed this project, and the first one isn't what you'd guess")
-- the consequence stated before the explanation ("This one mistake cost us six months")
-- direct address naming the viewer's situation ("If you've ever tried to do X and failed...")
-
-Avoid hooks that are generic scene-setting ("Today I want to talk about..."), that bury the interesting part after a throat-clear, or that only make sense with context the clip doesn't include.
-
-Each clip should also: contain one complete idea, work without needing outside context, end on a real conclusion rather than mid-sentence, and avoid starting or ending mid-sentence. Ideal duration is 15-90 seconds.
-
-Key topics: ${topicsLine}
-Summary: ${analysis.summary}
-
-Full transcript:
-${delimitTranscript(transcript.fullText)}`;
-}
-
-/**
- * Detects clip candidates: asks the AI for proposals, then runs every
- * proposal through deterministic clamping/merging/scoring
- * (src/clips/candidates.js) before anything is trusted or persisted —
- * see docs/AI.md §4.
- */
-async function detectClips({ provider, transcript, analysis, userId, processingJobId }) {
-  const { data } = await callStructured({
-    provider,
-    prompt: buildPrompt(transcript, analysis),
-    systemPrompt: UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT,
-    jsonSchema: CLIP_CANDIDATES_JSON_SCHEMA,
-    zodSchema: clipCandidatesSchema,
-    maxTokens: 2048,
-    userId,
-    processingJobId,
+async function proposeClips({ provider, lines, requestedClipCount, userId, processingJobId }) {
+  const chunks = chunkTimedLines(lines, {
+    maxCharsPerChunk: config.limits.maxTranscriptCharsPerAiCall,
+    maxChunks: config.limits.maxTranscriptChunks,
   });
+  const totalDurationMs = lines[lines.length - 1].endMs - lines[0].startMs;
 
-  const processed = processClipCandidates(data.clips, {
-    transcript,
-    durationMs: transcript.durationMs || transcript.segments[transcript.segments.length - 1]?.endMs || 0,
-  });
+  const proposals = [];
+  for (const chunk of chunks) {
+    const quota = proposalQuota({ requestedClipCount, chunkDurationMs: chunk.endMs - chunk.startMs, totalDurationMs });
+    const { data } = await callStructured({
+      provider,
+      prompt: buildFallbackPrompt(chunk.text, { quota }),
+      systemPrompt: UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT,
+      jsonSchema: CLIP_PROPOSALS_JSON_SCHEMA,
+      zodSchema: clipProposalsSchema,
+      maxTokens: 3072,
+      userId,
+      processingJobId,
+    });
+    for (const clip of data.clips) {
+      const span = resolveLineSpan(lines, clip.startLine, clip.endLine);
+      if (span) proposals.push({ ...clip, startLine: span.startLine, endLine: span.endLine });
+    }
+  }
+  return proposals;
+}
 
-  return processed;
+/**
+ * Chooses the clips for a job. Normally this makes no AI call at all: the analysis pass
+ * already proposed clips (as hook line .. end of explanation), and this turns them into
+ * exact, length-bounded, scored clips and picks the requested number, spread across the
+ * video. Returns { candidates, source, proposalCount }.
+ */
+async function detectClips({ provider, transcript, analysis, requestedClipCount, userId, processingJobId }) {
+  const count = requestedClipCount || config.limits.defaultClipsPerVideo;
+  const lines = buildTimedLines(transcript.segments);
+  if (lines.length === 0) return { candidates: [], source: 'none', proposalCount: 0 };
+
+  const durationMs = transcript.durationMs || lines[lines.length - 1].endMs;
+  const select = (proposals) => selectClips(buildCandidates(proposals, lines, { durationMs }), { count, durationMs });
+
+  const stored = analysis?.clips || [];
+  let candidates = select(stored);
+  if (candidates.length > 0) return { candidates, source: 'analysis', proposalCount: stored.length };
+
+  const proposed = await proposeClips({ provider, lines, requestedClipCount: count, userId, processingJobId });
+  candidates = select(proposed);
+  return { candidates, source: 'fallback', proposalCount: proposed.length };
 }
 
 async function persistClips(processingJobId, candidates) {
   return clipCandidateRepository.createMany(processingJobId, candidates);
 }
 
-module.exports = { detectClips, persistClips, buildPrompt, formatAnalysisSignals };
+module.exports = { detectClips, persistClips, buildFallbackPrompt };

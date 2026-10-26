@@ -1,4 +1,5 @@
 const logger = require('../../logger');
+const config = require('../../config');
 const db = require('../../db/client');
 const processingJobRepository = require('../../repositories/processingJob.repository');
 const contentAnalysisRepository = require('../../repositories/contentAnalysis.repository');
@@ -21,6 +22,7 @@ function rowToAnalysis(row) {
     conclusions: row.conclusions,
     memorableQuotes: row.memorable_quotes,
     selfContainedIdeas: row.self_contained_ideas,
+    clips: row.clip_proposals || [],
   };
 }
 
@@ -47,9 +49,20 @@ async function processClipsDetect(job) {
   const analysis = rowToAnalysis(analysisRow);
   const provider = getAIProvider();
 
+  const jobRow = await db('processing_jobs').where({ id: processingJobId }).first();
+  const requestedClipCount = jobRow.requested_clip_count || config.limits.defaultClipsPerVideo;
+
   let candidates;
+  let source;
   try {
-    candidates = await clipDetectionService.detectClips({ provider, transcript, analysis, userId, processingJobId });
+    ({ candidates, source } = await clipDetectionService.detectClips({
+      provider,
+      transcript,
+      analysis,
+      requestedClipCount,
+      userId,
+      processingJobId,
+    }));
   } catch (err) {
     if (err instanceof AIProviderError && !err.retryable) {
       await processingJobRepository.transitionState(processingJobId, {
@@ -67,7 +80,8 @@ async function processClipsDetect(job) {
   await processingJobRepository.transitionState(processingJobId, {
     fromState: 'FINDING_CLIPS',
     toState: 'CLIPS_FOUND',
-    metadata: { candidateCount: candidates.length },
+    // requested vs found is recorded so a shortfall (not enough strong clips) is visible, not silent
+    metadata: { candidateCount: candidates.length, requestedClipCount, source },
   });
 
   const persisted = await clipDetectionService.persistClips(processingJobId, candidates);
@@ -84,7 +98,7 @@ async function processClipsDetect(job) {
     { ...RETRY_CONFIG[QUEUE_NAMES.CLIP_RENDER], removeOnComplete: 100, removeOnFail: 500 },
   );
 
-  logger.info({ processingJobId, mediaAssetId, clipCount: persisted.length }, 'clips.detect completed');
+  logger.info({ processingJobId, mediaAssetId, requestedClipCount, clipCount: persisted.length, source }, 'clips.detect completed');
 }
 
 module.exports = processClipsDetect;

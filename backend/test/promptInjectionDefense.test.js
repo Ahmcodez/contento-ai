@@ -70,7 +70,8 @@ describe('AI call sites pass the untrusted-transcript system prompt and delimit 
     expect(provider.generateStructuredOutput).toHaveBeenCalledTimes(1);
     const call = provider.generateStructuredOutput.mock.calls[0][0];
     expect(call.systemPrompt).toBe(UNTRUSTED_TRANSCRIPT_SYSTEM_PROMPT);
-    expect(call.prompt).toContain(delimitTranscript(INJECTION_PAYLOAD));
+    // Lines are id-numbered now ("[0] ..."); the payload must still sit inside the delimiters.
+    expect(call.prompt).toContain(delimitTranscript(`[0] ${INJECTION_PAYLOAD}`));
   });
 
   it('contentGeneration.service (the highest-stakes path — output is often published unreviewed) sends the untrusted-transcript system prompt, delimits the transcript, and instructs the model to output only the requested content', async () => {

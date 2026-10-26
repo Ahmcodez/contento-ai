@@ -1,4 +1,5 @@
 const path = require('path');
+const { answerAnalysisPrompt } = require('./helpers/mockProviders');
 const fs = require('fs/promises');
 const db = require('../src/db/client');
 const config = require('../src/config');
@@ -41,44 +42,7 @@ describe('full content pipeline (e2e)', () => {
 
     global.__mockAIProvider = {
       constructor: { name: 'MockAIProvider' },
-      generateStructuredOutput: jest.fn(async ({ prompt }) => {
-        if (prompt.includes('clip moments')) {
-          return {
-            data: {
-              clips: [
-                {
-                  startMs: 2000,
-                  endMs: 9000,
-                  title: 'From startup failure to hard-won lesson',
-                  hook: 'My first startup failed — here is what it taught me',
-                  summary: 'A short story about startup failure and the lesson learned from it.',
-                  reason: 'Complete narrative arc with a clear takeaway',
-                  topic: 'entrepreneurship',
-                  estimatedQualityScore: 82,
-                },
-              ],
-            },
-            usage: { inputTokens: 50, outputTokens: 30 },
-          };
-        }
-        // content analysis call
-        return {
-          data: {
-            summary: 'The speaker shares a personal story about their first startup failing and the lesson of persistence.',
-            topics: ['entrepreneurship', 'failure', 'persistence'],
-            keyPoints: [{ text: 'Persistence matters more than raw talent', startMs: 6000, endMs: 9000 }],
-            stories: [{ text: 'First startup failing', startMs: 2000, endMs: 6000 }],
-            strongOpinions: [],
-            educationalMoments: [{ text: 'Persistence matters more than raw talent', startMs: 6000, endMs: 9000 }],
-            surprisingStatements: [{ text: 'a surprising story about my first startup failing', startMs: 2000, endMs: 6000 }],
-            questions: [],
-            conclusions: [{ text: 'that is the key lesson for anyone starting out', startMs: 9000, endMs: 12000 }],
-            memorableQuotes: [{ text: 'persistence matters more than raw talent', startMs: 6000, endMs: 9000 }],
-            selfContainedIdeas: [{ text: 'persistence matters more than raw talent', startMs: 6000, endMs: 9000 }],
-          },
-          usage: { inputTokens: 80, outputTokens: 60 },
-        };
-      }),
+      generateStructuredOutput: jest.fn(async ({ prompt }) => ({ data: answerAnalysisPrompt(prompt), usage: { inputTokens: 10, outputTokens: 10 } })),
       generateText: jest.fn(async ({ prompt }) => {
         const type = prompt.includes('X/Twitter') ? 'x_twitter' : 'generic';
         const text = type === 'x_twitter'

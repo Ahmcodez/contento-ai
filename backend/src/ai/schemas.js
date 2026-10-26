@@ -88,55 +88,17 @@ const CONTENT_ANALYSIS_JSON_SCHEMA = {
 };
 
 /**
- * Validates AI-proposed clip candidates. Note this only validates *shape*
- * — the deterministic clamping/bounds-checking against the real
- * transcript duration happens separately in src/clips/candidates.js
- * (docs/AI.md §4 "AI proposes, code disposes").
+ * Clip proposals on their own, for the fallback detector (the normal path gets its
+ * proposals from the analysis pass). Same proposal shape, same required hook: a response
+ * without a real hook fails validation and retries (reliableCall's schema-retry path)
+ * instead of silently shipping a clip with no hook. Shape only: times, lengths and
+ * overlap are enforced in code afterwards (src/clips/select.js).
  */
-const clipCandidatesSchema = z.object({
-  clips: z
-    .array(
-      z.object({
-        startMs: z.number().nonnegative(),
-        endMs: z.number().positive(),
-        title: z.string().min(1).max(200),
-        // Required, not optional: the literal opening line a viewer hears in
-        // the first 1-3 seconds. Making this mandatory means a response
-        // without a real hook fails schema validation and retries (see
-        // reliableCall.js's JSON/schema-validation retry path) instead of
-        // silently shipping a clip with no hook — the schema enforces the
-        // product requirement, not just the prompt wording.
-        hook: z.string().min(10).max(500),
-        summary: z.string().max(1000).optional(),
-        reason: z.string().max(500).optional(),
-        topic: z.string().max(200).optional(),
-        estimatedQualityScore: z.number().min(0).max(100).optional(),
-      }),
-    )
-    .default([]),
-});
+const clipProposalsSchema = z.object({ clips: z.array(clipProposalSchema).default([]) });
 
-const CLIP_CANDIDATES_JSON_SCHEMA = {
+const CLIP_PROPOSALS_JSON_SCHEMA = {
   type: 'object',
-  properties: {
-    clips: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          startMs: { type: 'number' },
-          endMs: { type: 'number' },
-          title: { type: 'string' },
-          hook: { type: 'string', description: 'The literal opening line, spoken in the first 1-3 seconds, that hooks the viewer.' },
-          summary: { type: 'string' },
-          reason: { type: 'string' },
-          topic: { type: 'string' },
-          estimatedQualityScore: { type: 'number' },
-        },
-        required: ['startMs', 'endMs', 'title', 'hook'],
-      },
-    },
-  },
+  properties: { clips: CONTENT_ANALYSIS_JSON_SCHEMA.properties.clips },
   required: ['clips'],
 };
 
@@ -144,6 +106,6 @@ module.exports = {
   contentAnalysisSchema,
   CONTENT_ANALYSIS_JSON_SCHEMA,
   clipProposalSchema,
-  clipCandidatesSchema,
-  CLIP_CANDIDATES_JSON_SCHEMA,
+  clipProposalsSchema,
+  CLIP_PROPOSALS_JSON_SCHEMA,
 };

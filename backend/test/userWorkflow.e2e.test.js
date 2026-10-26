@@ -1,5 +1,6 @@
 const request = require('supertest');
 const path = require('path');
+const { answerAnalysisPrompt } = require('./helpers/mockProviders');
 
 // This is the one test in the suite that walks the actual user journey
 // through the real HTTP API end to end: register -> login -> create
@@ -59,31 +60,7 @@ describe('complete user workflow (real HTTP + real queue + real workers)', () =>
 
     global.__e2eMockAIProvider = {
       constructor: { name: 'MockAIProvider' },
-      generateStructuredOutput: jest.fn(async ({ prompt }) => {
-        if (prompt.includes('clip moments')) {
-          return {
-            data: {
-              clips: [
-                {
-                  startMs: 500,
-                  endMs: 3500,
-                  title: 'A short clip',
-                  hook: 'Watch this',
-                  summary: 'A brief moment.',
-                  reason: 'Complete thought',
-                  topic: 'persistence',
-                  estimatedQualityScore: 75,
-                },
-              ],
-            },
-            usage: { inputTokens: 10, outputTokens: 10 },
-          };
-        }
-        return {
-          data: { summary: 'A short talk about persistence.', topics: ['persistence'], keyPoints: [] },
-          usage: { inputTokens: 10, outputTokens: 10 },
-        };
-      }),
+      generateStructuredOutput: jest.fn(async ({ prompt }) => ({ data: answerAnalysisPrompt(prompt), usage: { inputTokens: 10, outputTokens: 10 } })),
       generateText: jest.fn().mockResolvedValue({
         text: 'A short, honest post about persistence.',
         usage: { inputTokens: 10, outputTokens: 10 },
