@@ -133,7 +133,7 @@ const envSchema = z.object({
   // 4-hour video (MAX_VIDEO_DURATION_SECONDS) is no longer rejected at ~100 minutes.
   MAX_TRANSCRIPT_CHARS_PER_AI_CALL: z.coerce.number().int().positive().default(30000),
   MAX_TRANSCRIPT_CHUNKS: z.coerce.number().int().positive().default(12),
-  MAX_AI_CALLS_PER_JOB: z.coerce.number().int().positive().default(20),
+  MAX_AI_CALLS_PER_JOB: z.coerce.number().int().positive().default(30),
   MAX_GENERATED_CONTENT_TYPES: z.coerce.number().int().positive().default(5),
   AI_RETRY_ATTEMPTS: z.coerce.number().int().positive().default(3),
   // Real incident: Gemini's free tier caps gemini-*-flash at 5 requests

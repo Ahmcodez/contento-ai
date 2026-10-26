@@ -37,7 +37,36 @@ async function processContentGenerate(job) {
   let succeeded = 0;
   const failures = [];
 
-  for (const contentType of contentGenerationService.CONTENT_TYPES) {
+  // One call for all five (the transcript is sent once, not five times). If that single
+  // call can't be made to validate, fall back to one call per type so a bad bundle
+  // doesn't cost the user their content.
+  let bundle = null;
+  try {
+    bundle = await contentGenerationService.generateAllContent({ provider, transcript, analysis, userId, processingJobId });
+  } catch (err) {
+    if (err instanceof AIProviderError && !err.retryable) {
+      await processingJobRepository.transitionState(processingJobId, {
+        fromState: 'GENERATING_CONTENT',
+        toState: 'FAILED',
+        failureStage: 'GENERATING_CONTENT',
+        errorMessage: err.message,
+      });
+      logger.warn({ processingJobId, mediaAssetId, reason: err.reason }, 'AI provider not configured or over budget, job failed cleanly');
+      return;
+    }
+    logger.warn({ processingJobId, err: err.message }, 'combined content generation failed, falling back to one call per type');
+  }
+
+  if (bundle) {
+    for (const contentType of contentGenerationService.CONTENT_TYPES) {
+      const { body, metadata } = bundle[contentType];
+       
+      await contentGenerationService.persistContent({ processingJobId, contentType, body, metadata, aiProvider: provider.constructor.name });
+      succeeded += 1;
+    }
+  }
+
+  for (const contentType of bundle ? [] : contentGenerationService.CONTENT_TYPES) {
     try {
       const { body, metadata } = await contentGenerationService.generateContent({
         provider,

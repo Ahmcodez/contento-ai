@@ -11,6 +11,7 @@
  * starts at the first line (hook = its opening words, verbatim) and ends at the last.
  */
 function answerAnalysisPrompt(prompt) {
+  if (prompt.includes('Write ALL FIVE')) return answerContentBundle();
   const body = prompt.slice(prompt.indexOf('<transcript>'));
   const lines = [...body.matchAll(/^\[(\d+)\] (.+)$/gm)].map((m) => ({ id: Number(m[1]), text: m[2] }));
   const first = lines[0] || { id: 0, text: 'Opening words of the video' };
@@ -43,6 +44,17 @@ function answerAnalysisPrompt(prompt) {
   };
 }
 
+function answerContentBundle() {
+  const body = 'A grounded piece of written content generated from the transcript, discussing the startup failure story and the persistence lesson learned from it.';
+  return {
+    blog: `${body} ${body}`,
+    linkedin: body,
+    x_twitter: 'My first startup failed. Persistence beats raw talent every time.',
+    instagram_caption: `${body} #startups`,
+    youtube_description: body,
+  };
+}
+
 function installMockProviders() {
   global.__mockTranscriptionProvider = {
     transcribe: jest.fn().mockResolvedValue({
@@ -70,4 +82,4 @@ function removeMockProviders() {
   delete global.__mockTranscriptionProvider;
 }
 
-module.exports = { installMockProviders, removeMockProviders, answerAnalysisPrompt };
+module.exports = { installMockProviders, removeMockProviders, answerAnalysisPrompt, answerContentBundle };

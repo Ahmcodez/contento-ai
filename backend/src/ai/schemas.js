@@ -102,10 +102,37 @@ const CLIP_PROPOSALS_JSON_SCHEMA = {
   required: ['clips'],
 };
 
+/**
+ * All five written pieces from one call (see contentGeneration.service.generateAllContent).
+ * Minimum lengths only catch an empty or truncated answer; the real length limits are
+ * enforced in code afterwards.
+ */
+const contentBundleSchema = z.object({
+  blog: z.string().min(100),
+  linkedin: z.string().min(30),
+  x_twitter: z.string().min(5),
+  instagram_caption: z.string().min(10),
+  youtube_description: z.string().min(30),
+});
+
+const CONTENT_BUNDLE_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    blog: { type: 'string' },
+    linkedin: { type: 'string' },
+    x_twitter: { type: 'string' },
+    instagram_caption: { type: 'string' },
+    youtube_description: { type: 'string' },
+  },
+  required: ['blog', 'linkedin', 'x_twitter', 'instagram_caption', 'youtube_description'],
+};
+
 module.exports = {
   contentAnalysisSchema,
   CONTENT_ANALYSIS_JSON_SCHEMA,
   clipProposalSchema,
   clipProposalsSchema,
   CLIP_PROPOSALS_JSON_SCHEMA,
+  contentBundleSchema,
+  CONTENT_BUNDLE_JSON_SCHEMA,
 };
