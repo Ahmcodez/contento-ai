@@ -45,9 +45,10 @@ class S3StorageDriver extends StorageDriver {
     }
   }
 
-  async getReadStream(key) {
+  async getReadStream(key, { start, end } = {}) {
     try {
-      const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      const range = start === undefined ? undefined : `bytes=${start}-${end ?? ''}`;
+      const result = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key, Range: range }));
       return result.Body; // a Node.js Readable in the SDK v3 Node runtime
     } catch (err) {
       metrics.increment('storage_error', { operation: 'getReadStream', driver: 's3' });

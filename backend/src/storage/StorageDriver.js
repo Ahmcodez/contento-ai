@@ -11,7 +11,8 @@ class StorageDriver {
     throw new Error('StorageDriver.saveFromPath not implemented');
   }
 
-  async getReadStream(key) {
+  /** options.start / options.end: inclusive byte offsets for a partial read (HTTP Range). */
+  async getReadStream(key, options) {
     throw new Error('StorageDriver.getReadStream not implemented');
   }
 

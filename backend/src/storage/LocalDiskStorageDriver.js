@@ -37,7 +37,7 @@ class LocalDiskStorageDriver extends StorageDriver {
     }
   }
 
-  async getReadStream(key) {
+  async getReadStream(key, { start, end } = {}) {
     // Note: fs.createReadStream does not throw synchronously for a
     // missing/unreadable file — that surfaces as an async 'error' event
     // on the returned stream. Callers (e.g. clip.controller.js) listen
@@ -45,7 +45,8 @@ class LocalDiskStorageDriver extends StorageDriver {
     // covers the rarer synchronous failure (e.g. an invalid path).
     const abs = this.resolveKey(key);
     try {
-      return fs.createReadStream(abs);
+      // start/end are inclusive byte offsets (HTTP Range semantics); both undefined = whole file.
+      return start === undefined ? fs.createReadStream(abs) : fs.createReadStream(abs, { start, end });
     } catch (err) {
       metrics.increment('storage_error', { operation: 'getReadStream' });
       logger.error({ err: err.message, key }, 'storage: getReadStream failed synchronously');

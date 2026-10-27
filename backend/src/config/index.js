@@ -152,6 +152,8 @@ const envSchema = z.object({
   // Clips scoring under this (0-100, see src/clips/scoring.js) are never made, even if that
   // means fewer than the number asked for: padding with weak clips is worse than fewer good ones.
   CLIP_MIN_FINAL_SCORE: z.coerce.number().min(0).max(100).default(30),
+  // How long a clip playback link stays valid after the app asks for one. The app asks again when it expires.
+  PLAYBACK_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(86400).default(3600),
   CLIP_MIN_DURATION_SECONDS: z.coerce.number().int().positive().default(15),
   CLIP_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(90),
 
@@ -319,6 +321,8 @@ function loadConfig() {
     databaseUrl: env.DATABASE_URL,
     adminApiKey: env.ADMIN_API_KEY,
     redisUrl: env.REDIS_URL,
+
+    playbackUrlTtlSeconds: env.PLAYBACK_URL_TTL_SECONDS,
 
     auth: {
       accessSecret: env.JWT_ACCESS_SECRET,
