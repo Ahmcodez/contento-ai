@@ -70,7 +70,7 @@ export default function JobDetailPage() {
       <div>
         <Tabs tabs={WORKSPACE_TABS} active={activeTab} onChange={setActiveTab} />
         <div className="mt-6">
-          {activeTab === 'clips' && <ClipsPanel jobId={jobId} jobIsActive={isActive} jobStopped={jobStopped} />}
+          {activeTab === 'clips' && <ClipsPanel jobId={jobId} jobIsActive={isActive} jobStopped={jobStopped} requestedClipCount={job.requestedClipCount} />}
           {activeTab === 'content' && <ContentPanel jobId={jobId} jobIsActive={isActive} jobStopped={jobStopped} />}
           {activeTab === 'transcript' && <TranscriptPanel jobId={jobId} jobIsActive={isActive} jobStopped={jobStopped} />}
         </div>

@@ -1,4 +1,4 @@
-import { API_BASE, getAccessToken } from './client';
+import { API_BASE, getAccessToken, apiRequest } from './client';
 
 /**
  * Clip download has no JSON API wrapper — it streams the file directly
@@ -31,6 +31,20 @@ export async function downloadClip(clipCandidateId, filename = 'clip.mp4') {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * Asks for short-lived signed links to play a clip in the page. A <video> can't send our
+ * Authorization header, so the server checks the logged-in user here and hands back links
+ * the player can load directly: { streamUrl, posterUrl, expiresAt }.
+ */
+export async function getClipPlayback(clipCandidateId) {
+  const playback = await apiRequest(`/api/v1/clips/${clipCandidateId}/playback`, { method: 'POST' });
+  return {
+    streamUrl: `${API_BASE}${playback.streamUrl}`,
+    posterUrl: playback.posterUrl ? `${API_BASE}${playback.posterUrl}` : null,
+    expiresAt: playback.expiresAt,
+  };
 }
 
 // NOTE: there is no PATCH /clips/:id (manual bound editing) or

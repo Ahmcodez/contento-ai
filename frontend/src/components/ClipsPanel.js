@@ -9,7 +9,7 @@ import { getClips } from '@/lib/api/jobs';
 import { useRefetchOnJobComplete } from '@/lib/hooks/useRefetchOnJobComplete';
 import { STOPPED_COPY } from '@/lib/jobCopy';
 
-export default function ClipsPanel({ jobId, jobIsActive, jobStopped }) {
+export default function ClipsPanel({ jobId, jobIsActive, jobStopped, requestedClipCount }) {
   const [clips, setClips] = useState(null);
   const [error, setError] = useState(null);
 
@@ -58,11 +58,23 @@ export default function ClipsPanel({ jobId, jobIsActive, jobStopped }) {
     );
   }
 
+  // Be upfront when fewer clips came back than were asked for. Clips below the quality
+  // bar are skipped on purpose rather than padded in, so this is expected, not an error.
+  const fewerThanAsked = !jobIsActive && requestedClipCount && clips.length < requestedClipCount;
+
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-      {clips.map((clip) => (
-        <ClipCard key={clip.id} clip={clip} />
-      ))}
+    <div>
+      {fewerThanAsked && (
+        <p className="mb-4 rounded-lg border border-mist bg-mist/30 px-4 py-3 text-[13px] leading-relaxed text-steel">
+          Found {clips.length} strong {clips.length === 1 ? 'clip' : 'clips'} (you asked for {requestedClipCount}). Moments
+          that weren&apos;t good enough on their own aren&apos;t made, so you can get fewer than you asked for.
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        {clips.map((clip) => (
+          <ClipCard key={clip.id} clip={clip} />
+        ))}
+      </div>
     </div>
   );
 }
