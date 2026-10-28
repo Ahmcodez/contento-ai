@@ -4,6 +4,8 @@ import { useCallback, useRef, useState } from 'react';
 import Button from '@/components/ui/Button';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { uploadVideo } from '@/lib/api/media';
+import ClipCountPicker from '@/components/upload/ClipCountPicker';
+import { DEFAULT_CLIP_COUNT } from '@/lib/clipCount';
 import { formatBytes } from '@/lib/format';
 
 const ACCEPTED_EXTENSIONS = ['.mp4', '.mov', '.mkv', '.webm'];
@@ -27,6 +29,7 @@ export default function UploadDropzone({ projectId, onUploaded }) {
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState('idle'); // idle | uploading | done
   const [isDragging, setIsDragging] = useState(false);
+  const [clipCount, setClipCount] = useState(DEFAULT_CLIP_COUNT);
   const inputRef = useRef(null);
   const abortControllerRef = useRef(null);
 
@@ -56,6 +59,7 @@ export default function UploadDropzone({ projectId, onUploaded }) {
       const result = await uploadVideo(projectId, file, {
         onProgress: setProgress,
         signal: abortControllerRef.current.signal,
+        clipCount,
       });
       setStatus('done');
       onUploaded(result);
@@ -97,9 +101,12 @@ export default function UploadDropzone({ projectId, onUploaded }) {
       <div className="rounded-lg border border-mist p-6">
         <p className="text-sm text-graphite">{file.name}</p>
         <p className="mt-0.5 text-[12px] text-steel">{formatBytes(file.size)}</p>
+        <div className="mt-4">
+          <ClipCountPicker value={clipCount} onChange={setClipCount} />
+        </div>
         {uploadError && <p role="alert" className="mt-3 text-[13px] text-tally">{uploadError}</p>}
         <div className="mt-4 flex gap-2">
-          <Button onClick={startUpload}>{uploadError ? 'Retry upload' : 'Upload video'}</Button>
+          <Button onClick={startUpload} disabled={!clipCount}>{uploadError ? 'Retry upload' : 'Upload video'}</Button>
           <Button variant="ghost" onClick={reset}>
             Choose a different file
           </Button>
@@ -110,6 +117,9 @@ export default function UploadDropzone({ projectId, onUploaded }) {
 
   return (
     <div>
+      <div className="mb-4">
+        <ClipCountPicker value={clipCount} onChange={setClipCount} />
+      </div>
       <div
         onDragOver={(e) => {
           e.preventDefault();

@@ -16,7 +16,10 @@ export async function getUrlImport(mediaImportId) {
 }
 
 /** "Import & Analyze" — only valid once the import has reached WAITING_CONFIRMATION. */
-export async function confirmUrlImport(mediaImportId) {
-  const data = await apiRequest(`/api/v1/media-imports/${mediaImportId}/confirm`, { method: 'POST' });
+export async function confirmUrlImport(mediaImportId, { clipCount } = {}) {
+  const data = await apiRequest(`/api/v1/media-imports/${mediaImportId}/confirm`, {
+    method: 'POST',
+    body: JSON.stringify(clipCount ? { clipCount } : {}),
+  });
   return data.mediaImport;
 }

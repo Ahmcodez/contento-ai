@@ -5,6 +5,8 @@ import Button from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { createUrlImport, confirmUrlImport } from '@/lib/api/urlImport';
+import ClipCountPicker from '@/components/upload/ClipCountPicker';
+import { DEFAULT_CLIP_COUNT } from '@/lib/clipCount';
 import { useMediaImportStatus } from '@/lib/hooks/useMediaImportStatus';
 import { formatDuration } from '@/lib/format';
 import { ApiError } from '@/lib/api/client';
@@ -32,6 +34,7 @@ export default function PasteUrlImport({ projectId, onImported }) {
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [mediaImportId, setMediaImportId] = useState(null);
+  const [clipCount, setClipCount] = useState(DEFAULT_CLIP_COUNT);
 
   const { mediaImport, error: pollError, resumePolling } = useMediaImportStatus(mediaImportId);
 
@@ -54,7 +57,7 @@ export default function PasteUrlImport({ projectId, onImported }) {
     setConfirming(true);
     setSubmitError(null);
     try {
-      await confirmUrlImport(mediaImportId);
+      await confirmUrlImport(mediaImportId, { clipCount });
       resumePolling();
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : 'Could not start the import. Please try again.');
@@ -177,9 +180,13 @@ export default function PasteUrlImport({ projectId, onImported }) {
             </p>
           </div>
         </div>
+        {/* Chosen here, not when pasting: the preview above has just shown how long the video is. */}
+        <div className="mt-4">
+          <ClipCountPicker value={clipCount} onChange={setClipCount} disabled={confirming} />
+        </div>
         {submitError && <p role="alert" className="mt-3 text-[13px] text-tally">{submitError}</p>}
         <div className="mt-4 flex gap-2">
-          <Button onClick={handleConfirm} loading={confirming}>
+          <Button onClick={handleConfirm} loading={confirming} disabled={!clipCount}>
             Import &amp; Analyze
           </Button>
           <Button variant="ghost" onClick={reset}>

@@ -6,7 +6,7 @@ import { API_BASE, getAccessToken, ApiError, apiRequest } from './client';
  * instead, the only way to get real byte-level progress in the browser.
  * Every other API call still goes through apiRequest().
  */
-export function uploadVideo(projectId, file, { onProgress, signal } = {}) {
+export function uploadVideo(projectId, file, { onProgress, signal, clipCount } = {}) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API_BASE}/api/v1/projects/${projectId}/media`);
@@ -48,6 +48,8 @@ export function uploadVideo(projectId, file, { onProgress, signal } = {}) {
     }
 
     const formData = new FormData();
+    // Text fields go before the file so the server has them by the time the file arrives.
+    if (clipCount) formData.append('clipCount', String(clipCount));
     formData.append('video', file);
     xhr.send(formData);
   });
