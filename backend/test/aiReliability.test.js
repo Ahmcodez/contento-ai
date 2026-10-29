@@ -106,7 +106,7 @@ describe('callStructured', () => {
   });
 
   it('refuses to make a call once the job has hit its ai call budget', async () => {
-    usageService.countAiRequestsForJob.mockResolvedValueOnce(20); // at config default limit
+    usageService.countAiRequestsForJob.mockResolvedValueOnce(require('../src/config').limits.maxAiCallsPerJob); // exactly at the limit
     const provider = makeProvider([{ data: { value: 1 }, usage: {} }]);
     await expect(
       callStructured({ provider, prompt: 'p', zodSchema: simpleSchema, processingJobId: 'job-x', maxAttempts: 3 }),
