@@ -77,9 +77,9 @@ includes `{ "data": [...], "pagination": { "page", "pageSize", "total" } }`.
 
 ### `POST /api/v1/projects/:projectId/media`
 - Auth: bearer + ownership + quota check (`max_concurrent_jobs`, plan-based upload size/duration limits enforced post-upload at validation stage).
-- Request: `multipart/form-data`, single file field `video`, streamed directly to the `StorageDriver` (not buffered fully in memory) with size capped at the transport layer before app-level checks even run.
+- Request: `multipart/form-data`, single file field `video` plus an optional text field `clipCount` (whole number, `1` to `MAX_CLIPS_PER_VIDEO`; default `DEFAULT_CLIPS_PER_VIDEO`), streamed directly to the `StorageDriver` (not buffered fully in memory) with size capped at the transport layer before app-level checks even run.
 - Response `202`: `{ mediaAsset: {id, status: "uploading"}, processingJob: {id, state: "UPLOADING"} }` — job created immediately so the client can start polling before the upload even finishes.
-- Errors: `413 FILE_TOO_LARGE` (transport-level pre-check), `415 UNSUPPORTED_MEDIA_TYPE`, `429 QUOTA_EXCEEDED` (`{ code, message, quota: {...} }`), `422 VALIDATION_ERROR`.
+- Errors: `413 FILE_TOO_LARGE` (transport-level pre-check), `415 UNSUPPORTED_MEDIA_TYPE`, `429 QUOTA_EXCEEDED` (`{ code, message, quota: {...} }`), `422 VALIDATION_ERROR`, `422 INVALID_CLIP_COUNT` (nothing is created).
 
 ### `GET /api/v1/media/:mediaAssetId`
 - Auth: bearer + ownership.
@@ -140,6 +140,18 @@ includes `{ "data": [...], "pagination": { "page", "pageSize", "total" } }`.
 - Auth: bearer + ownership + quota check (counts toward `max_clips_per_video` if this is a net-new render vs a re-render of an edited clip).
 - Enqueues a `clip.render` job for this single clip (used both for initial auto-render and for re-rendering after a manual edit).
 - Response `202`: `{ generatedClip: {id, renderStatus: "pending"} }`.
+
+### `POST /api/v1/clips/:clipCandidateId/playback`
+- Auth: bearer + ownership. For in-app playback: a `<video>` can't send an `Authorization` header, so the app asks here, then loads the returned links directly.
+- Response `200`: `{ streamUrl, posterUrl | null, expiresAt }` (paths under the API origin). Links are signed (HMAC), bound to this clip and to one purpose (video or poster), and expire after `PLAYBACK_URL_TTL_SECONDS` (default 3600).
+- Errors: `404 NOT_FOUND`, `409 NOT_RENDERED`.
+
+### `GET /api/v1/clips/:clipCandidateId/stream?t=<token>`
+- Auth: the signed `t` token only (no bearer header). Supports `Range` (`206` partial content, `416` with `Content-Range: bytes */size` if out of range, `Accept-Ranges: bytes`), `HEAD`, and sends `Cross-Origin-Resource-Policy: cross-origin` so the app's page can load it.
+- Errors: `403 INVALID_PLAYBACK_LINK` (missing, malformed, tampered, expired, or for another clip/purpose), `404` (file missing), `409 NOT_RENDERED`.
+
+### `GET /api/v1/clips/:clipCandidateId/thumbnail?t=<token>`
+- Same signed-link rules; serves the clip's poster image (`image/jpeg`).
 
 ### `GET /api/v1/clips/:clipCandidateId/download`
 - Auth: bearer + ownership.

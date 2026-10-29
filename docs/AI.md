@@ -76,8 +76,9 @@ adapter, kept out of the interface/business logic:
 | Concern | AI or deterministic? | Why |
 |---|---|---|
 | Summarizing transcript, identifying themes | AI (`analyzeContent`) | Genuinely semantic task. |
-| Proposing candidate clip timestamps + rationale | AI (`generateStructuredOutput`) | Requires understanding narrative/emotional peaks. |
-| Clamping proposed timestamps to valid transcript bounds | **Deterministic** | Safety — AI can hallucinate out-of-range values. |
+| Proposing where a clip's hook is and where its explanation ends | AI, answering in **line ids** (as part of the analysis call) | Requires understanding narrative/emotional peaks. The model sees numbered lines, never timestamps, and is never asked for milliseconds it can't know. |
+| Turning line ids into exact start/end times, starting on the hook's first word, finishing sentences, length limits | **Deterministic** | Times come from the transcript, not the model; it can hallucinate or mis-number lines, so ids are validated and clamped. |
+| Choosing how many clips, spreading them across the video, dropping weak ones | **Deterministic** | The user's count and the quality floor are business rules; they must not depend on model behaviour. |
 | Merging overlapping clip candidates | **Deterministic** | Simple interval logic; no ambiguity AI needs to resolve. |
 | Enforcing `MAX_CLIPS_PER_VIDEO` | **Deterministic** | A hard business/cost rule, must never depend on model behavior. |
 | Final clip ranking/score | **Deterministic core + optional AI signal as one weighted input** | Needs to be stable, explainable, and cheaply re-runnable without re-calling the LLM every time scoring weights change. |

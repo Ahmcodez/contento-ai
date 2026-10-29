@@ -18,10 +18,26 @@
 | Operation | Cost driver | Guardrail |
 |---|---|---|
 | Transcription (if using a hosted API instead of local Whisper) | Per-minute of audio | `MAX_VIDEO_DURATION_SECONDS`, per-user daily quota, idempotency (never re-transcribe the same asset) |
-| `content.analyze` (Gemini call) | Per-token | One call per job (not per-segment), transcript chunking capped, quota-gated |
-| `clips.detect` (Gemini call) | Per-token | One call per job, quota-gated |
-| `content.generate` (Gemini call ×5 content types) | Per-token | Fanned out but bounded (exactly 5 fixed content types, not user-arbitrary), quota-gated per regenerate action too |
+| `content.analyze` (Gemini calls) | Per-token | The only full pass over the transcript besides content generation. One call per ~30k-character chunk (`MAX_TRANSCRIPT_CHARS_PER_AI_CALL`, `MAX_TRANSCRIPT_CHUNKS`), sequential, each at most 5 items per category. It also proposes the clips, so there is no separate detection pass. |
+| `clips.detect` | **No AI call normally** | Turns the analysis' clip proposals into exact clips in code. Only if analysis left no proposals does it fall back to asking the model (one call per chunk). |
+| `content.generate` (Gemini, **1 call** for all 5 content types) | Per-token | The transcript is sent once, not once per type. Falls back to one call per type only if the combined answer can't be validated. Quota-gated per regenerate action too. |
 | `clip.render` (FFmpeg, CPU/time not $, but compute time = infra cost at scale) | Compute minutes | `MAX_CLIPS_PER_VIDEO`, bounded clip duration |
+
+### Where the transcript goes
+
+A video's transcript is now sent to the model **twice** (analysis, content generation).
+It used to be sent about **seven** times: analysis, a separate clip-detection pass, and
+once for each of the five content types. A test (`test/contentBundle.test.js`) pins the
+content-generation half of that: five separate prompts carry more than 4x the text of
+the one combined prompt. Typical AI calls per video: ~5 to 6 (it was up to 14), which
+also stretches the per-user daily AI limit and any provider free tier that counts requests.
+
+Line numbering adds a short id to each line and a time marker once a minute, about 3% on
+top of the transcript, and replaces boundaries the model used to guess.
+
+Transcription (Groq / local Whisper) is billed by audio duration, not tokens. Audio is
+already extracted at 16 kHz mono (the minimum the speech model needs), transcribed once,
+and a retry reuses the stored transcript rather than transcribing again.
 
 Every row in the right column above is an actual configurable value in
 `.env.example` / the `quotas` table (`docs/DATABASE.md`) — nothing is a

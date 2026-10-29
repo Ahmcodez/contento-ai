@@ -117,16 +117,30 @@ percentage estimate.
   exhausted retries → `FAILED`, `failureStage=ANALYZING`.
 
 ### 3.6 FINDING_CLIPS → CLIPS_FOUND
-- `clips.detect` job. Uses the transcript + `ContentAnalysis` to identify
-  candidate moments via `AIProvider.generateStructuredOutput()` constrained
-  to a `ClipCandidate[]` schema (start/end timestamps, a rationale, a
-  suggested title). **Deterministic post-processing** (not AI) then:
-  clamps timestamps to valid transcript bounds, merges overlapping
-  candidates, enforces `MAX_CLIPS_PER_VIDEO`, drops any candidate whose
-  duration is out of an allowed clip-length range. This is a clear
-  example of §7's "AI proposes, code validates" pattern.
-- **Failure**: same retry pattern as 3.5. If zero valid candidates survive
-  post-processing, this is *not* a failure — it's a valid outcome
+- `clips.detect` job. **Normally makes no AI call.** The analysis pass (3.5)
+  reads the transcript as numbered lines (`[412] ...`, with a time marker each
+  minute) and proposes clips as line spans: the line where the **hook** is first
+  spoken through the line where that topic's **explanation** ends. Detection
+  (`src/clips/select.js`) then, in code:
+  - starts the clip on the hook's first spoken word (found in the word timestamps,
+    200 ms of pre-roll), not at the start of the line it sits in; a paraphrased
+    hook is replaced by what is actually said;
+  - ends it where the explanation ends, borrowing a line or two to finish a
+    sentence, extending a too-short span (never across a >4 s gap) and trimming a
+    too-long one back to a sentence end within `CLIP_MAX_DURATION_SECONDS`;
+  - scores each clip, drops any under `CLIP_MIN_FINAL_SCORE`, never keeps
+    overlapping clips, and picks exactly the **number the user asked for**
+    (`processing_jobs.requested_clip_count`, default `DEFAULT_CLIPS_PER_VIDEO`,
+    max `MAX_CLIPS_PER_VIDEO`), taking the best clip in each equal slice of the
+    timeline first so the picks are spread across the whole video.
+  If analysis left no proposals (e.g. an analysis stored before this existed) the
+  stage falls back to asking the model for proposals, one call per chunk. This is
+  §7's "AI proposes, code validates" pattern with the model answering in line ids,
+  not guessed milliseconds. The metadata on the `CLIPS_FOUND` event records
+  `requestedClipCount`, `candidateCount` and `source` (`analysis` / `fallback`).
+- **Failure**: same retry pattern as 3.5. Fewer clips than requested (not enough
+  strong ones) is *not* a failure: the user gets what exists, with a note. If zero valid candidates survive
+  post-processing, this is also not a failure — it's a valid outcome
   (`CLIPS_FOUND` with an empty set), surfaced to the user as "no strong
   clip moments found," pipeline continues to content generation since
   written content doesn't depend on clips.
