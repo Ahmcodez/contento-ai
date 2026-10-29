@@ -57,9 +57,8 @@ Every fix: (1) reproduce with a real test first (real Postgres/Redis/BullMQ/ffmp
 - Known flake: `redisResilience` can fail under `jest --detectOpenHandles` (also on the original code); never in normal runs.
 
 ## What's next
-1. A real-key run on a long podcast, then tune from what the model actually does (see above).
-1. Remaining frontend polish listed above, and re-audit after any redesign.
-2. Real-key run on a multi-hour podcast; verify Docker end to end.
+1. A real-key run on a multi-hour podcast, then tune from what the model actually does (see above); verify Docker end to end.
+2. Remaining frontend polish listed above, and re-audit after any redesign.
 3. Password reset (decide an email provider first), manual clip editing, content export.
 4. Optional: karaoke caption highlighting.
 
