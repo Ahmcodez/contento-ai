@@ -10,6 +10,7 @@ const { QUEUE_NAMES, PHYSICAL_QUEUES, STAGE_TO_QUEUE } = require('../queue/queue
 
 const processUrlImportResolve = require('./processors/urlImportResolve.processor');
 const processUrlImportDownload = require('./processors/urlImportDownload.processor');
+const processToolDownload = require('./processors/toolDownload.processor');
 const processVideoValidate = require('./processors/videoValidate.processor');
 const processAudioExtract = require('./processors/audioExtract.processor');
 const processTranscription = require('./processors/transcriptionProcess.processor');
@@ -32,6 +33,8 @@ const processJobFinalize = require('./processors/jobFinalize.processor');
 const STAGES = {
   [QUEUE_NAMES.URL_IMPORT_RESOLVE]: { jobName: 'url-import.resolve', handler: processUrlImportResolve, idField: 'mediaImportId' },
   [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: { jobName: 'url-import.download', handler: processUrlImportDownload, idField: 'mediaImportId' },
+  // Public tool downloads have no database row (state lives in Redis), hence idField: null.
+  [QUEUE_NAMES.TOOL_DOWNLOAD]: { jobName: 'tool.download', handler: processToolDownload, idField: null },
   [QUEUE_NAMES.VIDEO_VALIDATE]: { jobName: 'video.validate', handler: processVideoValidate },
   [QUEUE_NAMES.AUDIO_EXTRACT]: { jobName: 'audio.extract', handler: processAudioExtract },
   [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: { jobName: 'transcription.process', handler: processTranscription },
@@ -52,6 +55,7 @@ const QUEUE_CONCURRENCY = {
   [PHYSICAL_QUEUES.DOWNLOAD]: config.queue.concurrencyDefault,
   [PHYSICAL_QUEUES.TRANSCRIPTION]: config.queue.concurrencyTranscription,
   [PHYSICAL_QUEUES.RENDER]: config.queue.concurrencyDefault,
+  [PHYSICAL_QUEUES.TOOL]: config.queue.concurrencyTool,
 };
 
 /** Per-physical-queue BullMQ rate limiter (max jobs STARTED per window).
@@ -188,8 +192,8 @@ async function stopWorkers(workers) {
  */
 function wrapWithErrorPersistence(queueName, handler, idField = 'processingJobId') {
   return async (job) => {
-    const id = job.data[idField];
-    const stageLogger = logger.child({ stage: queueName, jobId: job.id, [idField]: id });
+    const id = idField ? job.data[idField] : null;
+    const stageLogger = logger.child({ stage: queueName, jobId: job.id, ...(idField ? { [idField]: id } : {}) });
     const startedAt = Date.now();
 
     stageLogger.info('stage started');

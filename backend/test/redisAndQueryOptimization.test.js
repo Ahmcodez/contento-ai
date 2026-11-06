@@ -47,7 +47,7 @@ describe('idle Redis polling tuning', () => {
     workerCtorCalls.length = 0;
     const workers = startWorkers();
     // one Worker per PHYSICAL queue (5), not per stage (10)
-    expect(workerCtorCalls.length).toBe(5);
+    expect(workerCtorCalls.length).toBe(6);
     for (const { opts } of workerCtorCalls) {
       expect(opts.drainDelay).toBe(config.queue.drainDelaySeconds);
       expect(opts.stalledInterval).toBe(config.queue.stalledIntervalMs);

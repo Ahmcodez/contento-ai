@@ -3,6 +3,7 @@ const YouTubeProvider = require('./YouTubeProvider');
 const VimeoProvider = require('./VimeoProvider');
 const TikTokProvider = require('./TikTokProvider');
 const DropboxProvider = require('./DropboxProvider');
+const { FacebookProvider, InstagramProvider, TwitterProvider, DailymotionProvider, RedditProvider } = require('./SocialProviders');
 const DirectMediaProvider = require('./DirectMediaProvider');
 
 /**
@@ -22,6 +23,11 @@ const PROVIDERS = [
   new VimeoProvider(),
   new TikTokProvider(),
   new DropboxProvider(),
+  new FacebookProvider(),
+  new InstagramProvider(),
+  new TwitterProvider(),
+  new DailymotionProvider(),
+  new RedditProvider(),
   new DirectMediaProvider(),
 ];
 
@@ -34,7 +40,7 @@ function resolveProvider(url) {
   const provider = PROVIDERS.find((p) => p.canHandle(url));
   if (!provider) {
     throw new ProviderError(
-      'This URL is not from a supported source. Supported: YouTube, Vimeo, TikTok, Dropbox, and direct video file links (.mp4, .mov, .mkv, .webm).',
+      'This URL is not from a supported source. Supported: YouTube, Vimeo, TikTok, Facebook, Instagram, X (Twitter), Dailymotion, Reddit, Dropbox, and direct video file links (.mp4, .mov, .mkv, .webm).',
       { retryable: false, reason: 'unsupported_provider', statusCode: 422 },
     );
   }

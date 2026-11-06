@@ -122,9 +122,17 @@ function run(args, { timeoutMs, maxBuffer = 10 * 1024 * 1024 } = {}) {
  * app captures it into; trimming this at the source (plus the larger
  * buffer ceiling below) is the actual fix, not just a bigger number.
  */
+/** Network args shared by every yt-dlp call: the optional proxy and cookies file. */
+function networkArgs() {
+  const args = [];
+  if (config.ytdlp.proxy) args.push('--proxy', config.ytdlp.proxy);
+  if (config.ytdlp.cookiesPath) args.push('--cookies', config.ytdlp.cookiesPath);
+  return args;
+}
+
 async function getMetadataJson(url) {
   const { stdout } = await run(
-    ['-J', '--no-playlist', '--no-warnings', '--skip-download', '--extractor-args', 'youtube:skip=translated_subs', url],
+    ['-J', '--no-playlist', '--no-warnings', '--skip-download', '--extractor-args', 'youtube:skip=translated_subs', ...networkArgs(), url],
     { timeoutMs: config.ytdlp.metadataTimeoutMs, maxBuffer: config.ytdlp.metadataMaxBufferBytes },
   );
   try {
@@ -186,6 +194,7 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
     'mp4',
     '--ffmpeg-location',
     ffmpegLocation,
+    ...networkArgs(),
     '-o',
     destPath,
     '--print',
@@ -284,4 +293,82 @@ async function downloadTo(url, destPath, { maxBytes } = {}) {
   );
 }
 
-module.exports = { getMetadataJson, downloadTo, classifyStderr };
+const TOOL_OUTPUT_EXTENSIONS = new Set(['.mp4', '.mp3']);
+
+/**
+ * Download for the public downloader tool: the visitor picks "video up to N p" or "audio only",
+ * and gets a single widely playable file (H.264/AAC MP4, or MP3).
+ *
+ *  - video prefers H.264 + AAC so the file plays everywhere (phones, TVs, old players), falling
+ *    back to whatever the site offers merged into an MP4 when those aren't available.
+ *  - audio is extracted to MP3 with ffmpeg.
+ *  - `--max-filesize` stops oversized downloads early; the caller still checks the real size,
+ *    because the estimate yt-dlp checks against can be low for merged streams.
+ *  - `--` before the URL means a URL can never be read as an option.
+ * Returns { filePath, ext } for the one real output file in outDir.
+ */
+async function downloadForTool(url, outDir, { mode, maxHeight, maxBytes }) {
+  if (mode !== 'video' && mode !== 'audio') throw new Error(`unknown download mode: ${mode}`);
+  const height = Math.trunc(Number(maxHeight));
+  if (mode === 'video' && !(height > 0)) throw new Error('maxHeight must be a positive number');
+
+  const ffmpegLocation = await resolveFfmpegLocationForYtDlp();
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const formatArgs =
+    mode === 'audio'
+      ? ['-f', 'bestaudio/best', '-x', '--audio-format', 'mp3', '--audio-quality', '5']
+      : [
+          '-f',
+          `bv*[height<=${height}][vcodec^=avc1]+ba[acodec^=mp4a]/b[height<=${height}][ext=mp4]/bv*[height<=${height}]+ba/b[height<=${height}]/b`,
+          '--merge-output-format',
+          'mp4',
+        ];
+
+  const args = [
+    '--no-playlist',
+    '--quiet',
+    ...formatArgs,
+    '--ffmpeg-location',
+    ffmpegLocation,
+    ...networkArgs(),
+    '--max-filesize',
+    String(maxBytes),
+    '-o',
+    path.join(outDir, 'media.%(ext)s'),
+    '--print',
+    'after_move:filepath',
+    '--',
+    url,
+  ];
+
+  const { stdout, stderr } = await run(args, { timeoutMs: config.ytdlp.downloadTimeoutMs });
+  const reported = stdout.split('\n').map((l) => l.trim()).filter(Boolean).pop();
+
+  const inOutDir = (p) => p && path.resolve(p).startsWith(`${path.resolve(outDir)}${path.sep}`);
+  const scanned = fs
+    .readdirSync(outDir)
+    .filter((f) => f.startsWith('media.') && !f.endsWith('.part') && TOOL_OUTPUT_EXTENSIONS.has(path.extname(f).toLowerCase()))
+    .map((f) => path.join(outDir, f));
+  const candidates = [...new Set([reported, ...scanned].filter((p) => inOutDir(p) && fs.existsSync(p)))].sort(
+    (a, b) => fs.statSync(b).size - fs.statSync(a).size,
+  );
+
+  if (candidates.length === 0) {
+    logger.error({ stdout: stdout?.slice(0, 1000), stderr: stderr?.slice(0, 1000) }, 'yt-dlp reported success but produced no file for the tool');
+    throw new ProviderError('The video could not be downloaded from this source right now.', { retryable: true, reason: 'extraction_failed', statusCode: 422 });
+  }
+
+  const filePath = candidates[0];
+  if (mode === 'video') {
+    // The same safeguard as the import flow: a merge that silently failed leaves a video-only
+    // fragment that exists and is non-empty, so check it has sound before handing it over.
+    const probed = await mediaProcessor.probe(filePath).catch(() => null);
+    if (!probed || !probed.hasAudio) {
+      throw new ProviderError('The video could not be downloaded with sound from this source.', { retryable: false, reason: 'no_audio_after_merge', statusCode: 422 });
+    }
+  }
+  return { filePath, ext: path.extname(filePath).toLowerCase() };
+}
+
+module.exports = { getMetadataJson, downloadTo, downloadForTool, classifyStderr, networkArgs };

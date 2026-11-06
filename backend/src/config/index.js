@@ -221,6 +221,25 @@ const envSchema = z.object({
   // is a safety-net ceiling; the actual fix is trimming the payload at
   // the source (see the extractor-args comment in getMetadataJson).
   YTDLP_METADATA_MAX_BUFFER_MB: z.coerce.number().int().positive().default(50),
+  // Optional. Video sites often block datacenter IPs ("sign in to confirm you're not a bot");
+  // a residential/rotating proxy is the usual fix. Cookies from a real account can also help
+  // but put that account at risk of being flagged, so treat the file like a password.
+  YTDLP_PROXY: z.string().optional(),
+  YTDLP_COOKIES_PATH: z.string().optional(),
+
+  // --- Public video downloader tool (no login). Every cap here exists because the endpoint is
+  // open to the internet: it spends bandwidth, CPU, disk and the server's reputation with the
+  // video sites. See docs/PUBLIC_DOWNLOADER.md.
+  PUBLIC_DOWNLOADER_ENABLED: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
+  TOOL_MAX_DURATION_SECONDS: z.coerce.number().int().positive().default(3600),
+  TOOL_MAX_FILESIZE_MB: z.coerce.number().int().positive().default(300),
+  TOOL_MAX_HEIGHT: z.coerce.number().int().positive().default(1080),
+  TOOL_FILE_TTL_SECONDS: z.coerce.number().int().min(60).default(1800),
+  TOOL_INFO_PER_MINUTE_PER_IP: z.coerce.number().int().positive().default(15),
+  TOOL_DOWNLOADS_PER_HOUR_PER_IP: z.coerce.number().int().positive().default(10),
+  TOOL_MAX_ACTIVE_PER_IP: z.coerce.number().int().positive().default(2),
+  // New downloads are refused ("busy, try again shortly") once this many are waiting.
+  TOOL_MAX_QUEUE_DEPTH: z.coerce.number().int().positive().default(60),
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   // Default of 1 assumes local Whisper: CPU/RAM-bound, so parallel jobs
@@ -240,6 +259,8 @@ const envSchema = z.object({
   // needed: concurrency alone doesn't prevent a burst of starts.
   QUEUE_CONCURRENCY_LIGHT: z.coerce.number().int().positive().default(4),
   QUEUE_CONCURRENCY_AI: z.coerce.number().int().positive().default(6),
+  // Public downloader: deliberately small. Each slot is a yt-dlp download (bandwidth + disk) for an anonymous visitor.
+  QUEUE_CONCURRENCY_TOOL: z.coerce.number().int().positive().default(2),
 
   // How long an *idle* worker blocks on Redis waiting for work before it
   // wakes itself up and re-checks. New jobs and due retries wake a worker
@@ -410,6 +431,22 @@ function loadConfig() {
       metadataTimeoutMs: env.YTDLP_METADATA_TIMEOUT_MS,
       downloadTimeoutMs: env.YTDLP_DOWNLOAD_TIMEOUT_MS,
       metadataMaxBufferBytes: env.YTDLP_METADATA_MAX_BUFFER_MB * 1024 * 1024,
+      proxy: env.YTDLP_PROXY || null,
+      cookiesPath: env.YTDLP_COOKIES_PATH || null,
+    },
+
+    tools: {
+      downloader: {
+        enabled: env.PUBLIC_DOWNLOADER_ENABLED,
+        maxDurationSeconds: env.TOOL_MAX_DURATION_SECONDS,
+        maxFilesizeBytes: env.TOOL_MAX_FILESIZE_MB * 1024 * 1024,
+        maxHeight: env.TOOL_MAX_HEIGHT,
+        fileTtlSeconds: env.TOOL_FILE_TTL_SECONDS,
+        infoPerMinutePerIp: env.TOOL_INFO_PER_MINUTE_PER_IP,
+        downloadsPerHourPerIp: env.TOOL_DOWNLOADS_PER_HOUR_PER_IP,
+        maxActivePerIp: env.TOOL_MAX_ACTIVE_PER_IP,
+        maxQueueDepth: env.TOOL_MAX_QUEUE_DEPTH,
+      },
     },
 
     queue: {
@@ -417,6 +454,7 @@ function loadConfig() {
       concurrencyTranscription: env.QUEUE_CONCURRENCY_TRANSCRIPTION,
       concurrencyLight: env.QUEUE_CONCURRENCY_LIGHT,
       concurrencyAi: env.QUEUE_CONCURRENCY_AI,
+      concurrencyTool: env.QUEUE_CONCURRENCY_TOOL,
       aiRateLimitMax: env.QUEUE_AI_RATE_LIMIT_MAX,
       aiRateLimitDurationMs: env.QUEUE_AI_RATE_LIMIT_DURATION_MS,
       drainDelaySeconds: env.QUEUE_DRAIN_DELAY_SECONDS,

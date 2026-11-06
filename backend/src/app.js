@@ -17,6 +17,7 @@ const mediaRoutes = require('./routes/media.routes');
 const jobRoutes = require('./routes/job.routes');
 const clipRoutes = require('./routes/clip.routes');
 const contentRoutes = require('./routes/content.routes');
+const toolsRoutes = require('./routes/tools.routes');
 const usageRoutes = require('./routes/usage.routes');
 const adminRoutes = require('./routes/admin.routes');
 
@@ -95,6 +96,7 @@ function createApp() {
   app.use('/api/v1', clipRoutes);
   app.use('/api/v1', contentRoutes);
   app.use('/api/v1', usageRoutes);
+  app.use('/api/v1/tools', toolsRoutes);
   app.use('/api/v1/admin', adminRoutes);
 
   app.use(notFoundHandler);

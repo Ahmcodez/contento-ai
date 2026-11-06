@@ -48,7 +48,7 @@ describe('queue routing integrity', () => {
     expect(Object.keys(STAGE_TO_QUEUE).sort()).toEqual([...stages].sort());
     const physical = new Set(Object.values(STAGE_TO_QUEUE));
     expect([...physical].sort()).toEqual(Object.values(PHYSICAL_QUEUES).sort());
-    expect(physical.size).toBe(5);
+    expect(physical.size).toBe(6);
   });
 
   it('every stage has a handler, a unique job name and a retry policy', () => {
@@ -78,6 +78,13 @@ describe('resource isolation is preserved (guards against future accidental merg
     expect(carried(PHYSICAL_QUEUES.DOWNLOAD)).toEqual([QUEUE_NAMES.URL_IMPORT_DOWNLOAD]);
   });
 
+  it('the public (no-login) downloader has a queue of its own, so anonymous traffic can never delay a customer', () => {
+    expect(carried(PHYSICAL_QUEUES.TOOL)).toEqual([QUEUE_NAMES.TOOL_DOWNLOAD]);
+    for (const queue of Object.values(PHYSICAL_QUEUES).filter((q) => q !== PHYSICAL_QUEUES.TOOL)) {
+      expect(carried(queue)).not.toContain(QUEUE_NAMES.TOOL_DOWNLOAD);
+    }
+  });
+
   it('the shared queues carry only the compatible stages', () => {
     expect(carried(PHYSICAL_QUEUES.LIGHT).sort()).toEqual(
       [QUEUE_NAMES.URL_IMPORT_RESOLVE, QUEUE_NAMES.VIDEO_VALIDATE, QUEUE_NAMES.AUDIO_EXTRACT, QUEUE_NAMES.JOB_FINALIZE].sort(),
@@ -94,6 +101,7 @@ describe('resource isolation is preserved (guards against future accidental merg
     expect(byQueue[PHYSICAL_QUEUES.RENDER]).toBe(config.queue.concurrencyDefault);
     expect(byQueue[PHYSICAL_QUEUES.DOWNLOAD]).toBe(config.queue.concurrencyDefault);
     expect(byQueue[PHYSICAL_QUEUES.LIGHT]).toBe(config.queue.concurrencyLight);
+    expect(byQueue[PHYSICAL_QUEUES.TOOL]).toBe(config.queue.concurrencyTool); // small on purpose
     // AI default = old 3 queues x 2, so worst-case simultaneous provider calls is unchanged
     expect(byQueue[PHYSICAL_QUEUES.AI]).toBe(config.queue.concurrencyAi);
     expect(config.queue.concurrencyAi).toBe(3 * config.queue.concurrencyDefault);

@@ -2,6 +2,7 @@ const logger = require('./logger');
 const config = require('./config');
 const { startWorkers, stopWorkers } = require('./workers');
 const { startReaper } = require('./workers/stuckJobReaper');
+const { startSweeper: startToolCleanup } = require('./tools/downloader/cleanup');
 const { checkStartupDependencies } = require('./workers/checkStartupDependencies');
 
 // Fire-and-forget: advisory only, never blocks the worker from starting
@@ -18,9 +19,13 @@ const workers = startWorkers();
 const reaper = config.reaper.enabled ? startReaper() : null;
 if (!reaper) logger.warn('stuck-job reaper disabled (REAPER_ENABLED=false)');
 
+// Deletes public-downloader files once they expire (and temp folders a crash left behind).
+const toolCleanup = startToolCleanup();
+
 function shutdown(signal) {
   logger.info(`Received ${signal}, shutting down workers`);
   if (reaper) reaper.stop();
+  toolCleanup.stop();
   stopWorkers(workers).finally(() => process.exit(0));
 }
 

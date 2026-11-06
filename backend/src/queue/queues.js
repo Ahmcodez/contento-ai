@@ -12,6 +12,8 @@ const QUEUE_NAMES = {
   CLIP_RENDER: 'clip-render',
   CONTENT_GENERATE: 'content-generate',
   JOB_FINALIZE: 'job-finalize',
+  // Public downloader tool: not part of the pipeline, but a download job like any other.
+  TOOL_DOWNLOAD: 'tool-download',
 };
 
 /**
@@ -40,6 +42,9 @@ const PHYSICAL_QUEUES = {
   DOWNLOAD: 'url-import-download',
   TRANSCRIPTION: 'transcription-process',
   RENDER: 'clip-render',
+  // Public (no-login) downloader. Its own queue on purpose: anonymous traffic is the one thing here that
+  // anyone on the internet can fill, so it must never sit in front of a customer's import or render.
+  TOOL: 'tool-download',
 };
 
 const STAGE_TO_QUEUE = {
@@ -51,6 +56,7 @@ const STAGE_TO_QUEUE = {
   [QUEUE_NAMES.CLIPS_DETECT]: PHYSICAL_QUEUES.AI,
   [QUEUE_NAMES.CONTENT_GENERATE]: PHYSICAL_QUEUES.AI,
   [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: PHYSICAL_QUEUES.DOWNLOAD,
+  [QUEUE_NAMES.TOOL_DOWNLOAD]: PHYSICAL_QUEUES.TOOL,
   [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: PHYSICAL_QUEUES.TRANSCRIPTION,
   [QUEUE_NAMES.CLIP_RENDER]: PHYSICAL_QUEUES.RENDER,
 };
@@ -81,6 +87,9 @@ const RETRY_CONFIG = {
   // more attempts, longer backoff, matching AUDIO_EXTRACT/TRANSCRIPTION_
   // PROCESS's reasoning for similarly substantial operations.
   [QUEUE_NAMES.URL_IMPORT_DOWNLOAD]: { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+  // One attempt: a failed public download is reported straight back to the visitor, and an
+  // automatic retry would just hit the video site again from the same IP.
+  [QUEUE_NAMES.TOOL_DOWNLOAD]: { attempts: 1 },
   [QUEUE_NAMES.VIDEO_VALIDATE]: { attempts: 1 },
   [QUEUE_NAMES.AUDIO_EXTRACT]: { attempts: 3, backoff: { type: 'exponential', delay: 2000 } },
   [QUEUE_NAMES.TRANSCRIPTION_PROCESS]: { attempts: 4, backoff: { type: 'exponential', delay: 5000 } },
