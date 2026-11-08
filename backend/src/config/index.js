@@ -240,6 +240,10 @@ const envSchema = z.object({
   TOOL_MAX_ACTIVE_PER_IP: z.coerce.number().int().positive().default(2),
   // New downloads are refused ("busy, try again shortly") once this many are waiting.
   TOOL_MAX_QUEUE_DEPTH: z.coerce.number().int().positive().default(60),
+  // Takedowns: comma-separated fragments of links that must not be downloaded (a video id, a channel handle,
+  // a whole URL). Matched case-insensitively anywhere in the pasted link; fragments under 6 characters are
+  // ignored so a typo can't block everything. Takes effect on the next restart.
+  TOOL_BLOCKLIST: z.string().optional(),
 
   QUEUE_CONCURRENCY_DEFAULT: z.coerce.number().int().positive().default(2),
   // Default of 1 assumes local Whisper: CPU/RAM-bound, so parallel jobs
@@ -446,6 +450,7 @@ function loadConfig() {
         downloadsPerHourPerIp: env.TOOL_DOWNLOADS_PER_HOUR_PER_IP,
         maxActivePerIp: env.TOOL_MAX_ACTIVE_PER_IP,
         maxQueueDepth: env.TOOL_MAX_QUEUE_DEPTH,
+        blocklist: (env.TOOL_BLOCKLIST || '').split(',').map((s) => s.trim().toLowerCase()).filter((s) => s.length >= 6),
       },
     },
 

@@ -54,6 +54,10 @@ function assertSupportedUrl(rawUrl) {
   }
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw AppError.badRequest('Only http and https links are supported', 'INVALID_URL');
 
+  if (settings().blocklist.some((fragment) => url.toLowerCase().includes(fragment))) {
+    throw new AppError('UNAVAILABLE', 'This video can\u2019t be downloaded here.', 451);
+  }
+
   // YouTube Music is a commercial music catalogue; it is deliberately not offered here.
   if (parsed.hostname.toLowerCase() === 'music.youtube.com') {
     throw new AppError('UNSUPPORTED_SOURCE', 'YouTube Music links are not supported. Try a regular YouTube video link.', 422);

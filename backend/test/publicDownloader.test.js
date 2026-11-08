@@ -159,6 +159,19 @@ describe('POST /downloader/info (no login)', () => {
     expect(JSON.stringify(res.body)).not.toMatch(/Traceback|ERROR:|\/usr|node_modules/);
   });
 
+  it('refuses a blocked video (a takedown) before contacting the site, without saying who asked', async () => {
+    settings.blocklist = ['abc123blocked'];
+    const res = await info('https://www.youtube.com/watch?v=ABC123BLOCKED');
+    expect(res.status).toBe(451);
+    expect(res.body.error.message).toBe('This video can\u2019t be downloaded here.');
+    expect((await create('https://youtu.be/abc123blocked', 'video-720')).status).toBe(451);
+    expect(logged()).toHaveLength(0);
+  });
+
+  it('ignores blocklist entries too short to be safe, so a typo can not block everything', () => {
+    expect(config.tools.downloader.blocklist.every((f) => f.length >= 6)).toBe(true);
+  });
+
   it('is switched off cleanly by the kill switch', async () => {
     settings.enabled = false;
     const res = await info(URL_OK);
