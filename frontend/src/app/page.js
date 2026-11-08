@@ -1,6 +1,7 @@
 import MarketingNav from '@/components/layout/MarketingNav';
 import Footer from '@/components/layout/Footer';
 import Hero from '@/components/marketing/Hero';
+import DownloaderSection from '@/components/marketing/DownloaderSection';
 import HowItWorks from '@/components/marketing/HowItWorks';
 import WhyChooseUs from '@/components/marketing/WhyChooseUs';
 import FeatureShowcase from '@/components/marketing/FeatureShowcase';
@@ -14,6 +15,7 @@ export default function Home() {
       <MarketingNav />
       <main>
         <Hero />
+        <DownloaderSection />
         <HowItWorks />
         <WhyChooseUs />
         <FeatureShowcase />

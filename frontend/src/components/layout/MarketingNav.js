@@ -15,6 +15,9 @@ export default function MarketingNav() {
           <a href="#why-us" className="hover:text-graphite">
             Why Contento
           </a>
+          <Link href="/video-downloader" className="hover:text-graphite">
+            Free video downloader
+          </Link>
           <a href="#pricing" className="hover:text-graphite">
             Pricing
           </a>
