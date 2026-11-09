@@ -183,6 +183,29 @@ includes `{ "data": [...], "pagination": { "page", "pageSize", "total" } }`.
 
 ---
 
+## Public video downloader (no login)
+
+Open endpoints used by the free downloader on the home page and the `/video-downloader` pages. No `Authorization` header; protected by per-visitor limits instead. Full operating notes: `docs/PUBLIC_DOWNLOADER.md`.
+
+### `POST /api/v1/tools/downloader/info`
+- Body: `{ url }`. Looks the link up (cached for 10 minutes).
+- Response `200`: `{ provider, title, thumbnailUrl, durationSeconds, uploader, options: [{ id, kind: "video"|"audio", label, height, approxSizeLabel }] }`. Option ids are `video-<height>` (only heights the video really has, up to `TOOL_MAX_HEIGHT`) and `audio-mp3`.
+- Errors: `422 INVALID_URL | UNSUPPORTED_SOURCE | TOO_LONG | LIVE_STREAM | PRIVATE_VIDEO | ...` (visitor-safe messages), `451 UNAVAILABLE` (blocked by takedown), `429` (lookup limit), `503 TOOL_DISABLED`.
+- Supported sites: YouTube, TikTok, Vimeo, Facebook, Instagram, X, Dailymotion, Reddit. YouTube Music, direct file links and Dropbox are refused.
+
+### `POST /api/v1/tools/downloader/jobs`
+- Body: `{ url, optionId }`. Starts preparing the file in the background.
+- Response `202`: `{ id }` (128-bit random; the only credential for the job).
+- Errors: as above, plus `422 INVALID_OPTION`, `429` (hourly download limit, or too many running at once), `503 BUSY` (queue full).
+
+### `GET /api/v1/tools/downloader/jobs/:id`
+- Response `200`: `{ id, state: queued|downloading|ready|failed|expired, provider, title, optionLabel, filename, sizeBytes, expiresAt, error }`. Never includes the source URL or storage location. Polling is exempt from the general rate limit and has its own (120/min).
+- Errors: `404 DOWNLOAD_NOT_FOUND`.
+
+### `GET /api/v1/tools/downloader/jobs/:id/file`
+- Streams the file as an attachment (`Content-Disposition`), with `Range` support, `Cache-Control: no-store`.
+- Errors: `404`, `409 NOT_READY`, `410 DOWNLOAD_EXPIRED` (files are deleted ~`TOOL_FILE_TTL_SECONDS` after they are made).
+
 ## Usage
 
 ### `GET /api/v1/usage`

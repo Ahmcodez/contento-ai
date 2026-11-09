@@ -4,7 +4,7 @@
 
 Pipeline stages are **logical stages** (`QUEUE_NAMES`): they identify a stage
 in logs, metrics, retry policy and the durable `failure_stage` column. They are
-carried by **five physical BullMQ queues** (`PHYSICAL_QUEUES`), each with one
+carried by **six physical BullMQ queues** (`PHYSICAL_QUEUES`), each with one
 Worker and therefore one idle polling loop (~30 Redis commands/min forever,
 regardless of what the queue does). Stages share a physical queue only when
 their workloads are compatible; the grouping below comes from a workload audit
@@ -17,6 +17,7 @@ their workloads are compatible; the grouping below comes from a workload audit
 | `url-import-download` | 2 | `url-import.download` | up to 15 min, disk + untrusted network; scaled/isolated separately |
 | `transcription-process` | 1 | `transcription.process` | CPU+RAM heavy (local Whisper), up to 10 min; will move to GPU/hosted |
 | `clip-render` | 2 | `clip.render` | 72 s per 60 s clip, CPU-saturating; needs its own hosts |
+| `tool-download` | 2 (`QUEUE_CONCURRENCY_TOOL`) | `tool.download` | the public, no-login downloader (`docs/PUBLIC_DOWNLOADER.md`). Its own queue **on purpose**: anonymous visitors can fill it, so it must never sit in front of a customer's import or render. One attempt, no retries |
 
 Not merged, on purpose: AI with light (a Gemini brownout would starve local
 stages for a ~6 commands/min saving) and transcription with render (no way to

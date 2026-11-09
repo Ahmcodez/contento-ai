@@ -143,3 +143,24 @@ did not exist; they never fall back to open. A wrong or missing key returns the
 same generic 401 as the rest of the API. This is a coarse operator credential,
 not per-user auth: keep it out of client code and rotate it like any secret.
 
+## 11. The public downloader (the one open, no-login surface that fetches things)
+`/api/v1/tools/downloader/*` lets anyone on the internet make the server fetch a video and hand
+the file back, so it is treated as the highest-risk surface. Details in `docs/PUBLIC_DOWNLOADER.md`.
+- **Not an open proxy.** Only a fixed list of video sites is accepted, matched by exact hostname
+  (so `youtube.com.evil.example` and `notyoutube.com` are refused). Direct file links, Dropbox and
+  internal addresses (`localhost`, `169.254.169.254`, ...) are refused before anything is fetched.
+- **Abuse limits.** Per-visitor limits on lookups (per minute) and downloads (per hour), a cap on
+  downloads running at once per visitor, a cap on how many are waiting overall (then "busy"), a
+  one-attempt queue of its own with small concurrency, and caps on length, size and quality.
+  A kill switch (`PUBLIC_DOWNLOADER_ENABLED=false`) turns it off without a deploy.
+- **Capability ids.** A download is reachable only by its 128-bit random id, which is never logged
+  alongside a source URL. Status responses omit the source URL, storage key and visitor.
+- **No server details to visitors.** Errors are translated into visitor wording by reason; an
+  unknown failure gets a generic line, and "yt-dlp is not installed" style setup messages are
+  never shown.
+- **Disposable.** Files are deleted ~30 minutes after creation by a sweeper, and temp folders left by
+  a crash are removed. The per-visitor counter is keyed by a hash of the IP, not the address.
+- **Command safety.** The URL is passed after `--` so it can never be read as an option; format ids
+  are validated against a strict pattern before they reach yt-dlp.
+- **Takedowns.** `TOOL_BLOCKLIST` blocks specific videos before any site is contacted.
+
