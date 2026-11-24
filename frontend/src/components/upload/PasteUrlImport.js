@@ -114,6 +114,7 @@ export default function PasteUrlImport({ projectId, onImported }) {
           Fetch preview
         </Button>
         <p className="text-[12px] text-steel">YouTube · Vimeo · TikTok · Dropbox · Direct URLs</p>
+        <p className="text-[12px] text-steel">Next you&apos;ll see the video&apos;s details and choose how many clips to make.</p>
       </form>
     );
   }
